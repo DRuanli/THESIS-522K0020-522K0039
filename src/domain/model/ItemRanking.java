@@ -1,12 +1,14 @@
 package domain.model;
 
 import java.util.*;
-import java.util.stream.Collectors;
+//import java.util.stream.Collectors;
+
+import infrastructure.computation.PTWUCalculator;
 
 import static infrastructure.util.NumericalConstants.EPSILON;
 
 /**
- * Maintains a total ordering of items by ascending PTWU (Probabilistic Transaction-Weighted Utility).
+ * Maintains a total ordering of items by ascending PTWU (Positive Transaction-Weighted Utility).
  *
  * <p>In the PTK-HUIM algorithm, items are processed in PTWU-ascending order during pattern growth.
  * This canonical ordering serves two critical purposes:
@@ -27,7 +29,7 @@ import static infrastructure.util.NumericalConstants.EPSILON;
  *   <li><b>Sorted list</b> — {@code sortedItems} stores items in PTWU-ascending order
  *       for sequential traversal during pattern growth</li>
  *   <li><b>Array-based reverse lookup</b> — {@code rankByItemId[item]} provides O(1)
- *       rank lookups (3× faster than HashMap) for filtering transaction items</li>
+ *       rank lookups for filtering transaction items</li>
  *   <li><b>PTWU values</b> — {@code ptwuValues[rank]} stores PTWU for binary search
  *       to compute the global cutoff threshold</li>
  * </ul>
@@ -64,7 +66,7 @@ import static infrastructure.util.NumericalConstants.EPSILON;
 public class ItemRanking {
 
     private final List<Integer> sortedItems;
-    private final int[] rankByItemId;  // Array-based rank lookup (faster than HashMap)
+    private final int[] rankByItemId; 
     private final double[] ptwuValues;
 
     /**
@@ -95,7 +97,7 @@ public class ItemRanking {
     }
 
     /**
-     * Constructs an {@code ItemRanking} from a PTWU array and a set of valid items.
+     * Constructs an {@code ItemRanking} from a PTWU array and a set of valid items. (a part of step 1c)
      *
      * <p>Only items present in {@code validItems} are included in the ranking
      * (items filtered out in Phase 1 by the EP threshold are excluded).
@@ -105,16 +107,18 @@ public class ItemRanking {
      * @param maxItemId  maximum item ID in the dataset (array size = maxItemId + 1)
      * @return {@code ItemRanking} with items sorted by PTWU ascending, ties broken by item ID
      */
+    /*
     public static ItemRanking fromPTWUArray(double[] ptwuArray,
                                            Set<Integer> validItems,
                                            int maxItemId) {
         List<Integer> sorted = validItems.stream()
+            
             .filter(item -> {
                 // Filter out items with PTWU <= 0
-                // These items appear in transactions but only with negative-profit items
                 double ptwu = (item <= maxItemId) ? ptwuArray[item] : 0.0;
                 return ptwu > 0.0;
             })
+            
             .sorted((a, b) -> {
                 double ptwuA = (a <= maxItemId) ? ptwuArray[a] : 0.0;
                 double ptwuB = (b <= maxItemId) ? ptwuArray[b] : 0.0;
@@ -124,6 +128,49 @@ public class ItemRanking {
             .collect(Collectors.toList());
         return new ItemRanking(sorted, ptwuArray, maxItemId);
     }
+    */
+
+    public static ItemRanking fromPTWUArray(double[] ptwuArray,
+                                        Set<Integer> validItems,
+                                        int maxItemId) {
+        Integer[] candidates = new Integer[validItems.size()];
+        int count = 0;
+
+        // 2. Filter Loop
+        // We know that if (item > maxItemId), ptwu is 0.0.
+        // Since we only want ptwu > 0, we can drop any item > maxItemId immediately.
+        // This allows us to skip the bounds check inside the sort later.
+        /*
+        for (Integer item : validItems) {
+            // Null check is good practice with Sets of Integers, though usually not needed if data is clean
+            if (item != null && item <= maxItemId) {
+                // Direct array access is safe here because of the check above
+                if (ptwuArray[item] > 0.0) {
+                    candidates[count++] = item;
+                }
+            }
+        }
+        */
+
+        // 3. Sort
+        // We sort only the filled portion of the array (0 to count).
+        Arrays.sort(candidates, 0, count, (a, b) -> {
+            // No need to check (item <= maxItemId) here; the filter step guaranteed it.
+            double pA = ptwuArray[a];
+            double pB = ptwuArray[b];
+
+            if (pA < pB) return -1;
+            if (pA > pB) return 1;
+            
+            // Tie-breaker: sort by Item ID
+            return a - b; 
+        });
+
+        // 4. Create the final list
+        List<Integer> sorted = Arrays.asList(Arrays.copyOf(candidates, count));
+
+        return new ItemRanking(sorted, ptwuArray, maxItemId);
+    }
 
 
     /**
@@ -131,8 +178,6 @@ public class ItemRanking {
      *
      * <p>Rank 0 corresponds to the item with the smallest PTWU.
      * Only valid items (those returned by {@link #getSortedItems()}) have a rank.
-     *
-     * <p><b>Performance</b>: O(1) direct array access (3x faster than HashMap.get()).
      *
      * @param item item ID
      * @return 0-based rank, or −1 if the item is not in the ranking
@@ -158,7 +203,7 @@ public class ItemRanking {
     /**
      * Binary-searches the PTWU array for the first index whose PTWU ≥ threshold.
      *
-     * <p>Used in Phase 5 to compute {@code globalCutoff}: since items below the
+     * <p>Used in Phase 3 to compute {@code globalCutoff}: since items below the
      * initial threshold can never form a valid extension (their PTWU is too low),
      * all search engines start extensions at or beyond this cutoff.
      *

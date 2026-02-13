@@ -24,11 +24,11 @@ if [ ! -d "bin" ] || [ ! -f "bin/cli/ComparisonBenchmark.class" ]; then
 fi
 
 # Default parameters (modify these)
-DATABASE="data/mushroom_database.txt"
-PROFITS="data/mushroom_profits.txt"
-K="100,500,1000,5000,10000"  # Comma-separated list for multiple k values, or single value like "1000"
+DATABASE="data/chess_database.txt"
+PROFITS="data/chess_profits.txt"
+K="1000"  # Comma-separated list for multiple k values, or single value like "1000"
 MINPROB=0.7
-DATASET="MUSHROOM"
+DATASET="CHESS"
 OUTPUT_DIR="results"
 
 echo "=================================================================="

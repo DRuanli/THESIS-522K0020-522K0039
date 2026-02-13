@@ -25,7 +25,7 @@ public final class MiningConfiguration {
 
 
     /**
-     * Search traversal strategy variants for Phase-5 pattern exploration.
+     * Search traversal strategy variants for Phase-3 pattern exploration.
      *
      * <p>All strategies are <em>exact</em> and guaranteed to return the true top-k
      * patterns for any input. The default is {@link #DFS}.
@@ -69,8 +69,6 @@ public final class MiningConfiguration {
      * <p>When {@code true} (default), uses ForkJoin for parallel PTWU and EP computation.
      * When {@code false}, uses sequential loop for performance comparison/debugging.
      *
-     * <p><b>Performance note</b>: Parallel mode provides 2.5-3x speedup on multi-core systems.
-     * Sequential mode is provided for benchmarking and debugging purposes only.
      */
     private final boolean useParallelPhase1a;
 
@@ -80,8 +78,6 @@ public final class MiningConfiguration {
      * <p>When {@code true} (default), uses ForkJoin + ParallelStream for building UPU-Lists.
      * When {@code false}, uses sequential loops for performance comparison/debugging.
      *
-     * <p><b>Performance note</b>: Parallel mode is significantly faster for large datasets.
-     * Sequential mode is provided for benchmarking and debugging purposes only.
      */
     private final boolean useParallelUPUListBuilding;
 
@@ -91,8 +87,6 @@ public final class MiningConfiguration {
      * <p>When {@code true} (default), uses ForkJoin to mine different prefixes in parallel.
      * When {@code false}, uses sequential loop for performance comparison/debugging.
      *
-     * <p><b>Performance note</b>: Parallel mode provides 3-4x speedup on multi-core systems.
-     * Sequential mode is provided for benchmarking and debugging purposes only.
      */
     private final boolean useParallelMining;
 
@@ -134,12 +128,12 @@ public final class MiningConfiguration {
         private int k;
         private double minProbability;
         private boolean debugMode = false;
-        private SearchStrategy searchStrategy = SearchStrategy.DFS;
+        private SearchStrategy searchStrategy = SearchStrategy.DFS; // Baseline (Best-first search outperform in experience)
         private JoinStrategy joinStrategy = JoinStrategy.TWO_POINTER;  // Default: optimal
         private TopKCollectorFactory.TopKCollectorType collectorType = TopKCollectorFactory.TopKCollectorType.BASELINE;  // Default: baseline
         private boolean useParallelPhase1a = true;  // Default: parallel (production behavior)
-        private boolean useParallelUPUListBuilding = true;  // Default: parallel (current behavior)
-        private boolean useParallelMining = true;  // Default: parallel (current behavior)
+        private boolean useParallelUPUListBuilding = true;  // Default: parallel 
+        private boolean useParallelMining = true;  // Default: parallel 
 
         public Builder setK(int k) {
             ValidationUtils.validatePositive(k, "k");
@@ -167,7 +161,7 @@ public final class MiningConfiguration {
         /**
          * Sets the UPU-List join strategy for research comparison.
          *
-         * <p><b>Default</b>: {@link JoinStrategy#TWO_POINTER} (optimal for PTK-HUIM)
+         * <p><b>Default</b>: {@link JoinStrategy#TWO_POINTER} 
          * <p><b>Research baselines</b>:
          * <ul>
          *   <li>{@link JoinStrategy#EXPONENTIAL_SEARCH} - for skewed lists</li>
@@ -187,10 +181,10 @@ public final class MiningConfiguration {
          * Sets the Top-K collector implementation type.
          *
          * <p><b>Default</b>: {@link TopKCollectorFactory.TopKCollectorType#BASELINE}
-         * <p><b>Available alternatives (both 100% correct)</b>:
+         * <p><b>Available alternatives (both 100% correct result, test with bruteforce)</b>:
          * <ul>
-         *   <li>{@link TopKCollectorFactory.TopKCollectorType#LAZY} - 6.7× speedup, high-throughput (RECOMMENDED)</li>
-         *   <li>{@link TopKCollectorFactory.TopKCollectorType#SHARDED} - 4.8× speedup, 16-32 cores</li>
+         *   <li>{@link TopKCollectorFactory.TopKCollectorType#LAZY} </li>
+         *   <li>{@link TopKCollectorFactory.TopKCollectorType#SHARDED}</li>
          * </ul>
          *
          * @param type the collector type to use

@@ -50,7 +50,7 @@ public final class UPUListJoiner implements UPUListJoinerInterface {
      * @param list1            UPU-List of the prefix itemset {@code X}
      * @param list2            UPU-List of the single-item extension {@code {j}}
      * @param extensionItem    item ID of {@code j}; passed directly to avoid iterating {@code list2.itemset}
-     * @param initialThreshold the static Phase 4 threshold; join is pruned if joined PTWU &lt; threshold
+     * @param initialThreshold the static Phase 2 threshold; join is pruned if joined PTWU &lt; threshold
      * @return the joined UPU-List {@code L(X ∪ {j})}, or {@code null} if the result is empty
      *         or pruned by the initial threshold
      */
@@ -80,24 +80,6 @@ public final class UPUListJoiner implements UPUListJoinerInterface {
         double tempPosUB = 0.0;       // Sum of (positive_total × probability)
         double logComplement = 0.0;   // Log-space EP accumulator: Σ log(1 - P)
 
-        // ========================================================================
-        // CACHE OPTIMIZATION: Direct Array Access
-        // ========================================================================
-        // Cache all array references before the hot loop to avoid repeated
-        // field dereferences (e.g., list1.transactionIds becomes tids1).
-        //
-        // Performance impact (measured on Chess dataset):
-        //   - Without caching: ~850ms for 10M joins
-        //   - With caching:    ~630ms for 10M joins
-        //   - Speedup: 1.35× (35% faster)
-        //
-        // Why this works:
-        //   1. JIT compiler may not always hoist field loads out of tight loops
-        //   2. Direct local variable access is guaranteed to avoid memory barriers
-        //   3. Reduces bytecode from getfield (3-5 cycles) to iload (1 cycle)
-        //   4. CPU cache-friendly: locals live in registers vs. heap fields
-        //
-        // Trade-off: Slightly more verbose code, but critical for hot-path performance
         int[] tids1 = list1.transactionIds;
         int[] tids2 = list2.transactionIds;
         double[] utils1 = list1.utilities;

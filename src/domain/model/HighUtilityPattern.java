@@ -31,18 +31,6 @@ import java.util.*;
  * <p>In Top-K High-Utility Itemset Mining, we discover the K patterns with highest EU,
  * subject to a minimum EP threshold. This class represents one such discovered pattern.
  *
- * <h3>Comparison Semantics</h3>
- * <ul>
- *   <li><b>compareTo()</b> — Compares by EU ascending (for min-heap in Top-K collection)</li>
- *   <li><b>equals()</b> — Based on itemset identity only (not EU or EP values)</li>
- *   <li><b>hashCode()</b> — Based on itemset identity only</li>
- * </ul>
- *
- * <h3>Performance Optimization</h3>
- * <p>The class caches a sorted item list at construction time to optimize the
- * {@code compareTo()} method, which is called frequently during Top-K maintenance.
- * This avoids repeated allocation and sorting operations.
- *
  * <h3>Immutability</h3>
  * <p>All fields are final, making instances immutable after construction. However,
  * the {@code items} set reference is retained directly (no defensive copy) for

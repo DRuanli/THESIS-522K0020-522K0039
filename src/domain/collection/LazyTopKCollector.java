@@ -12,9 +12,6 @@ import static infrastructure.util.NumericalConstants.EPSILON;
 /**
  * Lazy Top-K collector with batching for high-throughput scenarios.
  *
- * <p>This implementation achieves <b>6.7× speedup</b> (amortized) while maintaining
- * <b>100% exactness</b> (identical results to baseline).
- *
  * <h3>Design: Lazy Batching with Amortized Updates</h3>
  * <ul>
  *   <li><b>Fast path:</b> Lock-free buffering with conservative threshold check</li>
@@ -35,37 +32,6 @@ import static infrastructure.util.NumericalConstants.EPSILON;
  *
  * <p><b>Key insight:</b> Timing differs (immediate vs. batched), but final result
  * is IDENTICAL.
- *
- * <h3>Performance Characteristics</h3>
- * <ul>
- *   <li><b>Speedup:</b> 6.7× amortized (fast-path dominates)</li>
- *   <li><b>Latency:</b>
- *     <ul>
- *       <li>p50 = 20 ns (50× faster than baseline)</li>
- *       <li>p99 = 50 μs (flush spikes)</li>
- *     </ul>
- *   </li>
- *   <li><b>Memory:</b> 1 MB buffer overhead (batch_size × pattern_size)</li>
- *   <li><b>Throughput:</b> 50M patterns/sec (vs. 7.5M baseline)</li>
- * </ul>
- *
- * <h3>Trade-offs</h3>
- * <ul>
- *   <li><b>Pro:</b> Excellent amortized performance (6.7× faster)</li>
- *   <li><b>Pro:</b> 100% exact (no approximation)</li>
- *   <li><b>Pro:</b> Simple implementation (reuses baseline for exact processing)</li>
- *   <li><b>Con:</b> Latency variance (flush spikes)</li>
- *   <li><b>Con:</b> Buffer memory overhead (1 MB)</li>
- *   <li><b>Con:</b> Delayed updates (threshold staleness during buffering)</li>
- * </ul>
- *
- * <h3>When to Use</h3>
- * <p>Best for:
- * <ul>
- *   <li>High-throughput scenarios (many candidate patterns)</li>
- *   <li>Workloads with bursty pattern arrivals</li>
- *   <li>When amortized latency matters more than worst-case latency</li>
- * </ul>
  *
  * @see TopKPatternCollector
  * @see TopKCollectorInterface

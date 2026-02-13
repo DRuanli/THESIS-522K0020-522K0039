@@ -178,7 +178,7 @@ public final class UPUListBuilder {
      */
     private Map<Integer, List<UtilityProbabilityList.TransactionEntry>> collectEntriesSequential() {
         Map<Integer, List<UtilityProbabilityList.TransactionEntry>> itemEntries = new HashMap<>();
-        List<Transaction> database = context.getDatabase();
+        List<Transaction> database = context.getDatabase(); // second database scan 
 
         for (Transaction trans : database) {
             List<ItemInfo> validItems = extractSortedItems(trans);
@@ -271,22 +271,6 @@ public final class UPUListBuilder {
      * <p>The method tracks min/max rank during item extraction and uses this to
      * choose the optimal sorting algorithm:
      *
-     * <p><b>Counting Sort (O(n + k))</b> — Used when {@code range < items.size() × 4}
-     * <ul>
-     *   <li>Allocates array of size {@code range = maxRank - minRank + 1}</li>
-     *   <li>Places each item directly at index {@code rank - minRank}</li>
-     *   <li>Compacts back to original list (skipping null slots)</li>
-     *   <li>Advantage: Linear time, no comparisons</li>
-     *   <li>Disadvantage: Wastes memory if ranks are sparse</li>
-     * </ul>
-     *
-     * <p><b>Comparison Sort (O(n log n))</b> — Used when rank range is too sparse
-     * <ul>
-     *   <li>Uses {@code Collections.sort()} with rank comparator</li>
-     *   <li>Advantage: No extra memory allocation</li>
-     *   <li>Disadvantage: Slower for dense ranks</li>
-     * </ul>
-     *
      * <h3>Example</h3>
      * <pre>
      *   Transaction has items: {A:rank=5, B:rank=12, C:rank=7, D:rank=8}
@@ -301,16 +285,9 @@ public final class UPUListBuilder {
      *     buckets[3] = D (rank 8 → index 8-5=3)
      *     buckets[7] = B (rank 12 → index 12-5=7)
      *
-     *   Result: [A(5), C(7), D(8), B(12)] ✅ sorted by rank ascending
+     *   Result: [A(5), C(7), D(8), B(12)] sorted by rank ascending
      * </pre>
      *
-     * <h3>Performance</h3>
-     * <p>Benchmark on Chess dataset (avg 30 items/transaction):
-     * <ul>
-     *   <li>Counting sort: ~2.5μs per transaction</li>
-     *   <li>Comparison sort: ~4.2μs per transaction</li>
-     *   <li>Speedup: 1.68× for dense ranks</li>
-     * </ul>
      *
      * @param trans the transaction to process
      * @return list of valid items sorted by rank ascending (PTWU order)
@@ -352,10 +329,8 @@ public final class UPUListBuilder {
         int range = maxRank - minRank + 1;
 
         // Adaptive sort: counting sort if dense ranks, comparison sort if sparse
-        // Heuristic: use counting sort when array overhead is < 4× item count
         // (Avoids large sparse arrays for wide rank ranges)
         if (range < items.size() * 4 && range > 1) {
-            // COUNTING SORT: O(n + k) where k = range
             // Allocate bucket array sized to rank range
             ItemInfo[] buckets = new ItemInfo[range];
 
@@ -373,7 +348,6 @@ public final class UPUListBuilder {
                 }
             }
         } else {
-            // COMPARISON SORT: O(n log n)
             // Fallback when rank range is too sparse (e.g., 10 items with range 1000)
             items.sort(RANK_COMPARATOR);
         }
@@ -453,14 +427,6 @@ public final class UPUListBuilder {
          *   <li>Join left result (blocks until left completes)</li>
          *   <li>Merge right result into left result in-place</li>
          *   <li>Return merged result to parent</li>
-         * </ul>
-         *
-         * <h3>Fork-Last Pattern</h3>
-         * <p>The "fork left, compute right" pattern is a ForkJoin best practice:
-         * <ul>
-         *   <li>Avoids creating unnecessary task objects (right executes on current thread)</li>
-         *   <li>Reduces overhead by ~30% compared to forking both children</li>
-         *   <li>Current thread stays busy instead of idling during fork</li>
          * </ul>
          *
          * <h3>Merge Correctness</h3>

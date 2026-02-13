@@ -21,12 +21,6 @@ import static infrastructure.util.NumericalConstants.*;
  *   <li>If match found, compute joined entry and aggregates</li>
  * </ol>
  *
- * <p><b>When this wins</b>: Highly skewed lists (e.g., 10 vs 10,000 entries)
- * <p><b>When this loses</b>: Similar-sized lists with small gaps (PTK-HUIM scenario)
- *
- * <p><b>Expected performance</b>: ~1.5x slower than two-pointer merge for PTK-HUIM
- * due to poor cache locality from exponential jumps.
- *
  * <p><b>Thread safety</b>: Stateless, may be shared across threads.
  */
 public final class UPUListJoiner_ExponentialSearch implements UPUListJoinerInterface {

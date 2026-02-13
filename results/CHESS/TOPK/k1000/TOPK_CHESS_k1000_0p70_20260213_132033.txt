@@ -1,0 +1,109 @@
+================================================================================
+PTK-HUIM Comparison Benchmark Results
+================================================================================
+
+BENCHMARK CONFIGURATION
+  Comparison Type:     TOPK
+  Dataset:             CHESS
+  K (top patterns):    1000
+  Min Probability:     0.7000
+  Processors:          8
+  Warmup Runs:         2
+  Measured Runs:       5
+  Timestamp:           2026-02-13 13:20:33
+
+================================================================================
+RESULTS
+================================================================================
+
+[1/3] BASELINE
+  ----------------------------------------------------------------------------
+  Patterns Found:      0
+  Memory Usage:        10.61 MB
+
+  Individual Run Times (ms):
+    Run 1: 2 ms
+    Run 2: 2 ms
+    Run 3: 2 ms
+    Run 4: 2 ms
+    Run 5: 2 ms
+
+  Statistical Summary:
+    Mean:              2.00 ms
+    Median:            2.00 ms
+    Std Dev:           0.00 ms
+    Min:               2 ms
+    Max:               2 ms
+    CV (Coef. Var.):   0.00%
+
+[2/3] SHARDED
+  ----------------------------------------------------------------------------
+  Patterns Found:      0
+  Memory Usage:        10.70 MB
+
+  Individual Run Times (ms):
+    Run 1: 2 ms
+    Run 2: 4 ms
+    Run 3: 5 ms
+    Run 4: 3 ms
+    Run 5: 6 ms
+
+  Statistical Summary:
+    Mean:              4.00 ms
+    Median:            4.00 ms
+    Std Dev:           1.41 ms
+    Min:               2 ms
+    Max:               6 ms
+    CV (Coef. Var.):   35.36%
+
+[3/3] LAZY
+  ----------------------------------------------------------------------------
+  Patterns Found:      0
+  Memory Usage:        10.72 MB
+
+  Individual Run Times (ms):
+    Run 1: 5 ms
+    Run 2: 5 ms
+    Run 3: 4 ms
+    Run 4: 2 ms
+    Run 5: 2 ms
+
+  Statistical Summary:
+    Mean:              3.60 ms
+    Median:            4.00 ms
+    Std Dev:           1.36 ms
+    Min:               2 ms
+    Max:               5 ms
+    CV (Coef. Var.):   37.68%
+
+================================================================================
+SUMMARY TABLE
+================================================================================
+
+Configuration               Patterns    Mean (ms)  Median (ms)  StdDev (ms)       CV (%)
+----------------------------------------------------------------------------------------
+BASELINE                           0         2.00         2.00         0.00        0.00%
+SHARDED                            0         4.00         4.00         1.41       35.36%
+LAZY                               0         3.60         4.00         1.36       37.68%
+
+================================================================================
+Note: CV (Coefficient of Variation) = (StdDev / Mean) × 100%
+      CV < 5% indicates excellent reproducibility
+      CV 5-10% indicates acceptable variability
+      CV > 10% may indicate need for more runs or system interference
+================================================================================
+
+================================================================================
+PATTERN VERIFICATION
+================================================================================
+
+Reference Configuration: BASELINE
+  Rank 1:  null  EU=0.0000        EP=0,000000
+  Rank 1000: null  EU=0.0000        EP=0,000000
+
+SHARDED                    Rank 1: ✓ MATCH  Rank 1000: ✓ MATCH
+LAZY                       Rank 1: ✓ MATCH  Rank 1000: ✓ MATCH
+
+✓ All configurations produce IDENTICAL results!
+
+================================================================================

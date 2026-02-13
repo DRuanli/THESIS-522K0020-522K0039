@@ -11,23 +11,6 @@ import java.util.Locale;
  * <p>Results are presented as a ranked table with columns for rank, itemset,
  * Expected Utility, and Existential Probability.  A performance summary
  * (execution time, pattern count, memory) is appended at the end.
- *
- * <h3>Locale-Independent Formatting</h3>
- * <p>All floating-point values use {@link Locale#ROOT} to ensure consistent,
- * locale-independent decimal formatting. This is critical for:
- * <ul>
- *   <li><b>Reproducibility</b> — Results are identical regardless of system locale
- *       (e.g., US: "3.14", Germany: "3,14", France: "3,14")</li>
- *   <li><b>CSV parsing</b> — Comma-separated values remain parseable when decimals
- *       use period (.) instead of comma (,) as decimal separator</li>
- *   <li><b>Cross-platform compatibility</b> — Benchmark results can be compared
- *       across different systems and locales without reformatting</li>
- *   <li><b>Publication standards</b> — Scientific publications (PLOS ONE, IEEE, ACM)
- *       require period (.) as decimal separator per international standards</li>
- * </ul>
- *
- * <p><b>Example:</b> Without Locale.ROOT, a German system might output "123,456"
- * instead of "123.456", breaking CSV parsers and making cross-locale comparison impossible.
  */
 public final class ResultFormatter {
 

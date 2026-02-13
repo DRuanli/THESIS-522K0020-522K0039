@@ -22,12 +22,6 @@ import static infrastructure.util.NumericalConstants.*;
  *
  * <p><b>Complexity</b>: O(|L1| × log|L2|)
  *
- * <p><b>When this wins</b>: Extremely unbalanced lists (e.g., 100 vs 10,000 entries)
- * <p><b>When this loses</b>: Similar-sized lists (PTK-HUIM scenario)
- *
- * <p><b>Expected performance</b>: ~3.75x slower than two-pointer merge for PTK-HUIM
- * due to poor cache locality from random binary search jumps.
- *
  * <p><b>Thread safety</b>: Stateless, may be shared across threads.
  */
 public final class UPUListJoiner_BinarySearch implements UPUListJoinerInterface {

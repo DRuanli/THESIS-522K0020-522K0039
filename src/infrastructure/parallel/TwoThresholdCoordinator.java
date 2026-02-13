@@ -8,14 +8,14 @@ import static infrastructure.util.NumericalConstants.EPSILON;
  * Encapsulates the two-threshold correctness mechanism for parallel mining.
  *
  * <h3>Problem</h3>
- * In Phase 5, multiple ForkJoin threads mine different prefix subtrees concurrently.
+ * In Phase 3, multiple ForkJoin threads mine different prefix subtrees concurrently.
  * If Thread A raises the dynamic admission threshold while Thread B is deciding
  * whether to explore a subtree, Thread B might skip a subtree that would have
  * produced a valid top-k pattern under the threshold at the time Thread B started.
  *
  * <h3>Solution: two distinct thresholds</h3>
  * <ol>
- *   <li><b>{@code initialThreshold}</b> — {@code volatile} snapshot taken in Phase 4
+ *   <li><b>{@code initialThreshold}</b> — {@code volatile} snapshot taken in Phase 2
  *       <em>before</em> any mining thread starts.  Used for pruning prefix subtrees
  *       ({@link #shouldPrunePrefix(double)}).  Immutable once set.</li>
  *   <li><b>Dynamic threshold</b> — {@link TopKPatternCollector#admissionThreshold},
@@ -56,7 +56,7 @@ public final class TwoThresholdCoordinator {
     /**
      * Captures the current dynamic threshold as the immutable {@code initialThreshold}.
      *
-     * <p><b>CRITICAL:</b> Must be called in Phase 4, after all single-item patterns
+     * <p><b>CRITICAL:</b> Must be called in Phase 2, after all single-item patterns
      * have been evaluated but <em>before</em> any ForkJoin mining task is submitted.
      */
     public void captureInitialThreshold() {
@@ -64,7 +64,7 @@ public final class TwoThresholdCoordinator {
     }
 
     /**
-     * Returns the static initial threshold (Phase 4 snapshot).
+     * Returns the static initial threshold (Phase 2).
      *
      * @return the captured initial mining threshold; {@code 0.0} if not yet captured
      */

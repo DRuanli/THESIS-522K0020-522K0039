@@ -40,7 +40,7 @@ import static infrastructure.util.NumericalConstants.LOG_ZERO;
  *   <li>Valid data occupies indices {@code [0, entryCount)}; arrays may be pre-allocated
  *       with spare capacity (join uses {@code Math.min(list1.entryCount, list2.entryCount)}).</li>
  *   <li><b>Immutable after construction</b> — safe for concurrent reads across ForkJoin threads
- *       during Phase 5 parallel mining.</li>
+ *       during Phase 3 parallel mining.</li>
  * </ol>
  *
  * @see oop.domain.engine.UPUListJoiner
@@ -295,49 +295,5 @@ public final class UtilityProbabilityList {
                 ptwu, sumEU, ep, posUB
             );
         }
-    }
-
-    // -------------------------------------------------------------------------
-    // Test Helper Factory
-    // -------------------------------------------------------------------------
-
-    /**
-     * Creates a simplified UPU-List for testing/benchmarking purposes.
-     *
-     * <p>This factory method creates a minimal UPU-List with no transaction data,
-     * only the itemset and pre-computed EU/EP values. Used by benchmarks and
-     * correctness tests that only need to verify collector behavior, not mining logic.
-     *
-     * <p><b>NOTE:</b> This is NOT suitable for actual mining - it creates empty
-     * transaction arrays. Only use for testing Top-K collector implementations.
-     *
-     * @param itemset the itemset this list represents
-     * @param expectedUtility the EU value for this pattern
-     * @param existentialProbability the EP value for this pattern
-     * @return a minimal UPU-List for testing purposes
-     */
-    public static UtilityProbabilityList forTesting(
-            Set<Integer> itemset,
-            double expectedUtility,
-            double existentialProbability) {
-
-        // Create empty arrays (no actual transaction data)
-        int[] emptyTids = new int[0];
-        double[] emptyUtils = new double[0];
-        double[] emptyRU = new double[0];
-        double[] emptyLogProbs = new double[0];
-
-        return new UtilityProbabilityList(
-            itemset,
-            emptyTids,
-            emptyUtils,
-            emptyRU,
-            emptyLogProbs,
-            0,  // entryCount = 0
-            expectedUtility,  // Use EU as PTWU (doesn't matter for collector testing)
-            expectedUtility,
-            existentialProbability,
-            expectedUtility   // Use EU as PUB (doesn't matter for collector testing)
-        );
     }
 }

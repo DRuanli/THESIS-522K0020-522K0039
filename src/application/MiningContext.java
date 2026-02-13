@@ -33,17 +33,13 @@ public final class MiningContext {
     private final ProfitTable profitTable;
     private final List<Transaction> database;
 
-    // Phase 1 outputs (array-based for performance)
     private double[] itemPTWU;        // indexed by item ID
     private double[] itemLogComp;     // log-complement for EP computation
     private int maxItemId;            // for array bounds checking
     private Set<Integer> validItems;
-
-    // Phase 2 outputs
     private ItemRanking itemRanking;
     private Map<Integer, UtilityProbabilityList> singleItemLists;
 
-    // Phase 3-5: Pattern collection
     private final TopKCollectorInterface collector;  // Interface type for alternative implementations
     private final TwoThresholdCoordinator thresholdCoordinator;
 

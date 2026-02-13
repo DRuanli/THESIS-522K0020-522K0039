@@ -10,11 +10,11 @@ import java.util.concurrent.RecursiveTask;
 import static infrastructure.util.NumericalConstants.LOG_ZERO;
 
 /**
- * Computes PTWU (Probabilistic Transaction-Weighted Utility) and EP (Existential Probability)
+ * Computes PTWU (Positive Transaction-Weighted Utility) and EP (Existential Probability)
  * for all items in Phase 1 of the PTK-HUIM algorithm.
  *
  * <h3>What is PTWU?</h3>
- * <p><b>PTWU (Probabilistic Transaction-Weighted Utility)</b> is a critical upper bound used
+ * <p><b>PTWU (Positive Transaction-Weighted Utility)</b> is a critical upper bound used
  * for pruning low-utility itemsets during pattern growth. It represents the sum of transaction
  * utilities across all transactions where an item <i>might</i> appear.
  *
@@ -28,7 +28,7 @@ import static infrastructure.util.NumericalConstants.LOG_ZERO;
  * <h3>Why PTWU is Essential</h3>
  * <p>PTWU serves as a <b>monotone upper bound</b> for Expected Utility (EU):
  * <ul>
- *   <li>If PTWU(item) < threshold, then EU(item) < threshold (guaranteed!)</li>
+ *   <li>If PTWU(item) < threshold, then EU(item) < threshold</li>
  *   <li>If PTWU(itemset X) < threshold, then EU(any superset of X) < threshold</li>
  *   <li>This allows early pruning without computing expensive EU calculations</li>
  * </ul>
@@ -84,19 +84,6 @@ import static infrastructure.util.NumericalConstants.LOG_ZERO;
  * </ol>
  * <p>The two passes must be separate because PTU(T) must be fully computed before
  * distributing it to item PTWU values.
- *
- * <h3>Performance Optimizations</h3>
- * <ul>
- *   <li><b>Array-based accumulation</b> — Uses {@code double[]} indexed by item ID instead
- *       of HashMap for 5× faster access (critical bottleneck in Phase 1)</li>
- *   <li><b>Profit caching</b> — Pre-loads profit values into {@code profitCache[]} array
- *       to avoid repeated ProfitTable lookups</li>
- *   <li><b>ForkJoin parallelism</b> — Splits database into 256-transaction chunks,
- *       processes in parallel with work-stealing (2.5-3× speedup on 4-core systems)</li>
- *   <li><b>Thread-local accumulators</b> — Each thread accumulates into private arrays,
- *       merged via lock-free in-place addition (15× faster than synchronized HashMap)</li>
- *   <li><b>Fork-last pattern</b> — Reduces task object allocations by 50%</li>
- * </ul>
  *
  * <h3>Usage</h3>
  * <pre>
@@ -158,7 +145,7 @@ public class PTWUCalculator {
      *
      * <p>Encapsulates the three key outputs from Phase 1 preprocessing:
      * <ul>
-     *   <li>PTWU array — Probabilistic Transaction-Weighted Utility per item</li>
+     *   <li>PTWU array — Positive Transaction-Weighted Utility per item</li>
      *   <li>Log-complement array — For on-demand EP (Existential Probability) calculation</li>
      *   <li>Maximum item ID — Determines array sizes throughout mining</li>
      * </ul>
@@ -253,23 +240,23 @@ public class PTWUCalculator {
 
                 // Accumulate PTU (only positive profits contribute)
                 if (profitCache[item] > 0) {
-                    ptu += profitCache[item] * trans.getQuantity(item);
+                    ptu += profitCache[item] * trans.getQuantity(item); // PTU formula, DEFINITION 7
                 }
 
                 // Accumulate EP log-complement
-                logComp[item] += ProbabilityModel.logComplement(trans.getProbability(item));
+                // Previously it has it own loop, but I have merge with ptwu for optimization
+                logComp[item] += ProbabilityModel.logComplement(trans.getProbability(item)); // DEFINITION 3b
             }
 
             // Second pass: distribute PTU to all valid items
             // Note: Must be separate loop since we need complete PTU value first
             for (int item : items) {
                 if (item <= maxItemId) {
-                    ptwu[item] += ptu;
+                    ptwu[item] += ptu; // PTWU, DEFINITION 7
                 }
             }
         }
 
-        // Return arrays directly (no HashMap conversion!)
         // EP is computed on-demand via getEP() to avoid storing twice
         return new PTWUComputationResult(ptwu, logComp, maxItemId);
     }
@@ -280,16 +267,6 @@ public class PTWUCalculator {
      * <p>Splits the database into chunks (LEAF_SIZE=256 transactions) and processes
      * them in parallel using work-stealing. Each thread accumulates into thread-local
      * arrays, then merges results via in-place addition (zero allocations).
-     *
-     * <p><b>Optimizations</b>:
-     * <ul>
-     *   <li>LEAF_SIZE=256: Fits in L2 cache (~100KB), amortizes task overhead 50:1</li>
-     *   <li>Fork-last pattern: Creates 50% fewer task objects</li>
-     *   <li>In-place merge: Zero allocations during merge phase</li>
-     *   <li>Thread-local accumulators: Lock-free parallelism (15x faster than locks)</li>
-     * </ul>
-     *
-     * <p><b>Performance</b>: Expected 2.5-3x speedup on 4-core systems.
      *
      * @param database list of all transactions
      * @param executor ForkJoinPool for parallel execution
@@ -311,13 +288,6 @@ public class PTWUCalculator {
     private final class Phase1ScanTask extends RecursiveTask<Phase1Accumulator> {
         /**
          * Stop splitting when range ≤ 256 transactions.
-         *
-         * <p><b>Rationale</b>:
-         * <ul>
-         *   <li>256 trans × ~400 bytes/trans = ~100KB (fits in L2 cache)</li>
-         *   <li>Task overhead ~1-2μs, processing time ~50-100μs (50:1 ratio)</li>
-         *   <li>Chess (3196 trans) → ~12 leaf tasks (good for 8-core CPU)</li>
-         * </ul>
          */
         private static final int LEAF_SIZE = 256;
 
@@ -388,7 +358,7 @@ public class PTWUCalculator {
                     local.logComp[item] += ProbabilityModel.logComplement(trans.getProbability(item));
                 }
 
-                // Second pass: distribute PTU to all valid items
+                // Second pass: distribute PTU to all valid items -> PTWU
                 for (int item : items) {
                     if (item <= maxItemId) {
                         local.ptwu[item] += ptu;

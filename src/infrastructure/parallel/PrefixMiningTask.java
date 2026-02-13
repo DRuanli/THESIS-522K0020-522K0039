@@ -214,10 +214,6 @@ public final class PrefixMiningTask extends RecursiveAction {
      * globalCutoff, fineGrainThreshold) are shared across all subtasks. Only the range
      * boundaries (start, end) differ for each child task.
      *
-     * <p><b>Performance note:</b> This method is called frequently during decomposition.
-     * All shared references are passed by reference (no copying), so task creation overhead
-     * is minimal (< 100 bytes per task object).
-     *
      * @param start inclusive start index for the child task's item range
      * @param end   exclusive end index for the child task's item range
      * @return new {@code PrefixMiningTask} responsible for items [start, end)

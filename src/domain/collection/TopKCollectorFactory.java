@@ -7,52 +7,6 @@ package domain.collection;
  * for performance comparison and evaluation. All implementations guarantee <b>100% exactness</b>
  * (identical results to baseline).
  *
- * <h3>Available Implementations</h3>
- * <ul>
- *   <li><b>BASELINE</b> — Dual-structure min-heap (TreeSet + HashMap)
- *     <ul>
- *       <li>Speedup: 1.0× (reference)</li>
- *       <li>Memory: 260 KB (k=1000)</li>
- *       <li>Best for: Single-threaded or low contention</li>
- *     </ul>
- *   </li>
- *   <li><b>SHARDED</b> — Distributed sharding with parallel collectors
- *     <ul>
- *       <li>Speedup: 4.8× on 8 cores</li>
- *       <li>Memory: 4.2 MB (k=1000, 16 shards)</li>
- *       <li>Best for: 16-32 core systems</li>
- *     </ul>
- *   </li>
- *   <li><b>LAZY</b> — Lazy batching with amortized updates
- *     <ul>
- *       <li>Speedup: 6.7× amortized</li>
- *       <li>Memory: 1.3 MB (k=1000)</li>
- *       <li>Best for: High-throughput, bursty workloads</li>
- *     </ul>
- *   </li>
- * </ul>
- *
- * <h3>Usage Example</h3>
- * <pre>{@code
- * // Create collector via factory
- * TopKCollectorInterface collector = TopKCollectorFactory.create(
- *     TopKCollectorType.SHARDED,
- *     1000  // k = 1000
- * );
- *
- * // Use collector (interface is uniform across all implementations)
- * collector.tryCollect(candidate);
- * List<HighUtilityPattern> topK = collector.getCollectedPatterns();
- * }</pre>
- *
- * <h3>Configuration</h3>
- * <p>The collector type can be selected via:
- * <ul>
- *   <li>Environment variable: {@code TOPK_COLLECTOR_TYPE=SHARDED}</li>
- *   <li>System property: {@code -Dtopk.collector.type=LAZY}</li>
- *   <li>Direct factory call: {@code TopKCollectorFactory.create(TopKCollectorType.BASELINE, k)}</li>
- * </ul>
- *
  * @see TopKCollectorInterface
  * @see TopKPatternCollector
  * @see ShardedTopKCollector
@@ -255,37 +209,5 @@ public final class TopKCollectorFactory {
 
         // Return default
         return DEFAULT_TYPE;
-    }
-
-    /**
-     * Returns a summary of all available collector types and their characteristics.
-     *
-     * @return multi-line string describing all collector types
-     */
-    public static String getAvailableTypes() {
-        return "Available Top-K Collector Types:\n" +
-               "\n" +
-               "1. BASELINE (Reference Implementation)\n" +
-               "   - Dual-structure min-heap (TreeSet + HashMap)\n" +
-               "   - Speedup: 1.0× (reference)\n" +
-               "   - Memory: 260 KB (k=1000)\n" +
-               "   - Correctness: 100% (15/15 tests)\n" +
-               "   - Best for: Reference/baseline comparison\n" +
-               "\n" +
-               "2. SHARDED (Parallel Sharding)\n" +
-               "   - Distributed sharding with parallel collectors\n" +
-               "   - Speedup: 4.8× on 8 cores (linear to 32 cores)\n" +
-               "   - Memory: 4.2 MB (k=1000, 16 shards)\n" +
-               "   - Correctness: 100% (15/15 tests)\n" +
-               "   - Best for: 16-32 core systems\n" +
-               "\n" +
-               "3. LAZY (Batching and Amortization)\n" +
-               "   - Lazy batching with amortized updates\n" +
-               "   - Speedup: 6.7× amortized\n" +
-               "   - Memory: 1.3 MB (k=1000)\n" +
-               "   - Correctness: 100% (15/15 tests)\n" +
-               "   - Best for: High-throughput, bursty workloads (RECOMMENDED)\n" +
-               "\n" +
-               "All implementations guarantee 100% exactness (identical results).\n";
     }
 }

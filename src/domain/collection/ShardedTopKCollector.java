@@ -9,9 +9,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Distributed Top-K collector using sharding for parallel scalability.
  *
- * <p>This implementation achieves <b>4.8× speedup</b> on 8-core systems (up to 32 cores)
- * while maintaining <b>100% exactness</b> (identical results to baseline).
- *
  * <h3>Design: Parallel Sharding with Exact Merge</h3>
  * <ul>
  *   <li><b>Sharding:</b> Multiple independent {@link TopKPatternCollector} instances</li>
@@ -40,24 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   <li><b>Memory:</b> 16× overhead (n shards × k patterns each)</li>
  *   <li><b>Final merge:</b> O(n·k log k) - negligible compared to mining time</li>
  * </ul>
- *
- * <h3>Trade-offs</h3>
- * <ul>
- *   <li><b>Pro:</b> Excellent scalability on multi-core systems (16-32 cores)</li>
- *   <li><b>Pro:</b> Simple implementation (reuses baseline collector)</li>
- *   <li><b>Pro:</b> 100% exact (no approximation)</li>
- *   <li><b>Con:</b> Higher memory usage (4.16 MB vs 260 KB for k=1000)</li>
- *   <li><b>Con:</b> Final merge overhead (but amortized over mining)</li>
- * </ul>
- *
- * <h3>When to Use</h3>
- * <p>Best for:
- * <ul>
- *   <li>High-core systems (16+ cores)</li>
- *   <li>Large k values (k ≥ 500)</li>
- *   <li>High contention scenarios (many concurrent mining threads)</li>
- * </ul>
- *
+ * 
  * @see TopKPatternCollector
  * @see TopKCollectorInterface
  */

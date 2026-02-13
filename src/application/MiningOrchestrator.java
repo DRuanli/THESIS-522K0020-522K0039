@@ -25,24 +25,15 @@ import static infrastructure.util.NumericalConstants.EPSILON;
  *   <li><b>PHASE 3: MINING</b> — Parallel/sequential prefix-growth with selected search strategy.</li>
  * </ol>
  *
- * <h3>Refactoring notes</h3>
- * <p>This class has been refactored to improve maintainability:
- * <ul>
- *   <li>Constants moved to {@link OrchestratorConfiguration}</li>
- *   <li>Engine creation moved to {@link SearchEngineFactory}</li>
- *   <li>UPU-List building moved to {@link UPUListBuilder}</li>
- *   <li>Sequential/parallel modes unified with conditional dispatching</li>
- * </ul>
- *
  * @see MiningConfiguration
  * @see MiningContext
  * @see SearchEngineFactory
  */
 public final class MiningOrchestrator {
 
-    private final MiningConfiguration config;
-    private final PTWUCalculator ptwuCalculator;
-    private final ForkJoinPool executorPool;
+    private final MiningConfiguration config; // Global config
+    private final PTWUCalculator ptwuCalculator; // Compute both ptwu + ep
+    private final ForkJoinPool executorPool; // Parallel
 
     /**
      * Constructs an orchestrator for the given configuration.
@@ -164,7 +155,7 @@ public final class MiningOrchestrator {
         context.setMaxItemId(phase1Result.maxItemId);
 
         // Filter items by minimum EP threshold
-        // Items with EP < minProbability are unreliable (unlikely to appear in any transaction)
+        // Items with EP < minProbability are unreliable 
         // and are excluded from all subsequent mining phases
         Set<Integer> validItems = new HashSet<>();
         for (int item : context.getProfitTable().getAllItems()) {
@@ -204,14 +195,23 @@ public final class MiningOrchestrator {
         }
 
         // Step 2a: Evaluate and collect 1-itemsets
+        // Set the topK
         TopKCollectorInterface collector = context.getCollector();
+
+        // Process with single-item in PTWU-ascending order
         for (int item : context.getItemRanking().getSortedItems()) {
+
+            // Get the UPUList of single item (Phase 1 output)
             UtilityProbabilityList itemList = context.getSingleItemLists().get(item);
+
+            // Double check
             if (itemList == null) continue;
 
+            // Access pre-computed (it is already computed in Phase 1)
             double eu = itemList.expectedUtility;
             double ep = itemList.existentialProbability;
 
+            // Try to put in topK
             if (ep >= config.getMinProbability() - EPSILON &&
                 eu >= collector.getAdmissionThreshold() - EPSILON) {
                 collector.tryCollect(itemList);
@@ -219,6 +219,7 @@ public final class MiningOrchestrator {
         }
 
         // Step 2b: Capture initial threshold for mining phase
+        // If the k > valid single-itemset -> intial threshold = 0.0
         context.getThresholdCoordinator().captureInitialThreshold();
 
         if (config.isDebugMode()) {
@@ -300,14 +301,16 @@ public final class MiningOrchestrator {
             context.getThresholdCoordinator().getInitialThreshold());
 
         // Cache frequently accessed context data for performance
-        List<Integer> sortedItems = context.getItemRanking().getSortedItems();
-        Map<Integer, UtilityProbabilityList> singleItemLists = context.getSingleItemLists();
-        double initialThreshold = context.getThresholdCoordinator().getInitialThreshold();
+        List<Integer> sortedItems = context.getItemRanking().getSortedItems(); // All ranked item in PTWU-asc-order
+        Map<Integer, UtilityProbabilityList> singleItemLists = context.getSingleItemLists(); // Access pre-compute UPUList 
+        double initialThreshold = context.getThresholdCoordinator().getInitialThreshold(); // initial threshold in Phase 2
 
         // Process each prefix sequentially in PTWU-ascending order
         // Starting from globalCutoff skips low-utility items entirely
         for (int i = globalCutoff; i < sortedItems.size(); i++) {
             int prefixItem = sortedItems.get(i);
+
+            // Access pre-compute UPUList by the current proccesed item
             UtilityProbabilityList prefixList = singleItemLists.get(prefixItem);
 
             // Skip if UPU-List wasn't created (item was filtered in Phase 1d)
