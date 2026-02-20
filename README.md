@@ -253,8 +253,8 @@ PTU(T) = Σ u(i, T)  for all i ∈ T where profit(i) > 0
 
 **Note**: Only positive-profit items contribute to PTU (negative profits ignored for upper bound).
 
-**Definition 9 (Probabilistic Transaction-Weighted Utility)**
-The **Probabilistic Transaction-Weighted Utility (PTWU)** of itemset X is:
+**Definition 9 (Positive Transaction-Weighted Utility)**
+The **Positive Transaction-Weighted Utility (PTWU)** of itemset X is:
 ```
 PTWU(X) = Σ PTU(T)  for all T where X ⊆ T
 ```
