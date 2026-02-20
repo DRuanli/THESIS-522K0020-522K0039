@@ -1,0 +1,153 @@
+================================================================================
+PTK-HUIM Comparison Benchmark Results
+================================================================================
+
+BENCHMARK CONFIGURATION
+  Comparison Type:     PARALLELISM
+  Dataset:             CHESS
+  K (top patterns):    50
+  Min Probability:     0.7000
+  Processors:          8
+  Warmup Runs:         2
+  Measured Runs:       5
+  Timestamp:           2026-02-20 13:27:29
+
+================================================================================
+RESULTS
+================================================================================
+
+[1/5] Full_Parallel
+  ----------------------------------------------------------------------------
+  Patterns Found:      50
+  Memory Usage:        43.83 MB
+
+  Individual Run Times (ms):
+    Run 1: 266 ms
+    Run 2: 292 ms
+    Run 3: 260 ms
+    Run 4: 336 ms
+    Run 5: 218 ms
+
+  Statistical Summary:
+    Mean:              274.40 ms
+    Median:            266.00 ms
+    Std Dev:           38.89 ms
+    Min:               218 ms
+    Max:               336 ms
+    CV (Coef. Var.):   14.17%
+
+[2/5] Full_Sequential
+  ----------------------------------------------------------------------------
+  Patterns Found:      50
+  Memory Usage:        25.75 MB
+
+  Individual Run Times (ms):
+    Run 1: 3180 ms
+    Run 2: 2611 ms
+    Run 3: 2686 ms
+    Run 4: 2421 ms
+    Run 5: 2290 ms
+
+  Statistical Summary:
+    Mean:              2637.60 ms
+    Median:            2611.00 ms
+    Std Dev:           304.96 ms
+    Min:               2290 ms
+    Max:               3180 ms
+    CV (Coef. Var.):   11.56%
+
+[3/5] Phase3_Only_Parallel
+  ----------------------------------------------------------------------------
+  Patterns Found:      50
+  Memory Usage:        24.21 MB
+
+  Individual Run Times (ms):
+    Run 1: 61 ms
+    Run 2: 89 ms
+    Run 3: 91 ms
+    Run 4: 60 ms
+    Run 5: 62 ms
+
+  Statistical Summary:
+    Mean:              72.60 ms
+    Median:            62.00 ms
+    Std Dev:           14.24 ms
+    Min:               60 ms
+    Max:               91 ms
+    CV (Coef. Var.):   19.61%
+
+[4/5] Phase1a_Sequential
+  ----------------------------------------------------------------------------
+  Patterns Found:      50
+  Memory Usage:        50.47 MB
+
+  Individual Run Times (ms):
+    Run 1: 57 ms
+    Run 2: 54 ms
+    Run 3: 63 ms
+    Run 4: 173 ms
+    Run 5: 58 ms
+
+  Statistical Summary:
+    Mean:              81.00 ms
+    Median:            58.00 ms
+    Std Dev:           46.09 ms
+    Min:               54 ms
+    Max:               173 ms
+    CV (Coef. Var.):   56.90%
+
+[5/5] Phase1d_Sequential
+  ----------------------------------------------------------------------------
+  Patterns Found:      50
+  Memory Usage:        57.75 MB
+
+  Individual Run Times (ms):
+    Run 1: 64 ms
+    Run 2: 186 ms
+    Run 3: 99 ms
+    Run 4: 68 ms
+    Run 5: 62 ms
+
+  Statistical Summary:
+    Mean:              95.80 ms
+    Median:            68.00 ms
+    Std Dev:           47.06 ms
+    Min:               62 ms
+    Max:               186 ms
+    CV (Coef. Var.):   49.12%
+
+================================================================================
+SUMMARY TABLE
+================================================================================
+
+Configuration               Patterns    Mean (ms)  Median (ms)  StdDev (ms)       CV (%)
+----------------------------------------------------------------------------------------
+Full_Parallel                     50       274.40       266.00        38.89       14.17%
+Full_Sequential                   50      2637.60      2611.00       304.96       11.56%
+Phase3_Only_Parallel              50        72.60        62.00        14.24       19.61%
+Phase1a_Sequential                50        81.00        58.00        46.09       56.90%
+Phase1d_Sequential                50        95.80        68.00        47.06       49.12%
+
+================================================================================
+Note: CV (Coefficient of Variation) = (StdDev / Mean) × 100%
+      CV < 5% indicates excellent reproducibility
+      CV 5-10% indicates acceptable variability
+      CV > 10% may indicate need for more runs or system interference
+================================================================================
+
+================================================================================
+PATTERN VERIFICATION
+================================================================================
+
+Reference Configuration: Full_Parallel
+  Rank 1:  [4, 6, 8, 9]  EU=61992.9600    EP=1,000000
+  Rank 50: [2, 6, 8, 9]  EU=50180.2400    EP=1,000000
+
+Full_Sequential            Rank 1: ✓ MATCH  Rank 50: ✓ MATCH
+Phase3_Only_Parallel       Rank 1: ✓ MATCH  Rank 50: ✓ MATCH
+Phase1a_Sequential         Rank 1: ✓ MATCH  Rank 50: ✓ MATCH
+Phase1d_Sequential         Rank 1: ✓ MATCH  Rank 50: ✓ MATCH
+
+✓ All configurations produce IDENTICAL results!
+
+================================================================================

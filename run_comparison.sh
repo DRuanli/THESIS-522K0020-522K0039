@@ -31,6 +31,7 @@ MINPROB=0.7
 DATASET="CHESS"
 OUTPUT_DIR="results"
 
+
 echo "=================================================================="
 echo "PTK-HUIM Comparison Benchmark"
 echo "=================================================================="
