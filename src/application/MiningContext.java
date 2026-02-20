@@ -3,7 +3,7 @@ package application;
 import domain.collection.TopKCollectorFactory;
 import domain.collection.TopKCollectorInterface;
 import domain.model.*;
-import infrastructure.parallel.TwoThresholdCoordinator;
+import infrastructure.parallel.ThresholdCoordinator;
 
 import java.util.List;
 import java.util.Map;
@@ -33,15 +33,21 @@ public final class MiningContext {
     private final ProfitTable profitTable;
     private final List<Transaction> database;
 
-    private double[] itemPTWU;        // indexed by item ID
-    private double[] itemLogComp;     // log-complement for EP computation
+    private double[] itemPTWU;        // NOW: dense array indexed by dense index
+    private double[] itemLogComp;     // NOW: dense array indexed by dense index
     private int maxItemId;            // for array bounds checking
+
+    // Dense index mapping (NEW)
+    private int[] itemIdToDenseIndex;  // sparse[maxItemId+1] -> dense index or -1
+    private int[] denseIndexToItemId;  // dense[denseSize] -> item ID
+    private int denseSize;             // number of actual items
+
     private Set<Integer> validItems;
     private ItemRanking itemRanking;
     private Map<Integer, UtilityProbabilityList> singleItemLists;
 
     private final TopKCollectorInterface collector;  // Interface type for alternative implementations
-    private final TwoThresholdCoordinator thresholdCoordinator;
+    private final ThresholdCoordinator thresholdCoordinator;
 
     public MiningContext(MiningConfiguration config, ProfitTable profitTable,
                          List<Transaction> database) {
@@ -50,7 +56,7 @@ public final class MiningContext {
         this.database = database;
         // Use factory to create collector based on configuration
         this.collector = TopKCollectorFactory.create(config.getCollectorType(), config.getK());
-        this.thresholdCoordinator = new TwoThresholdCoordinator(collector);
+        this.thresholdCoordinator = new ThresholdCoordinator(collector);
     }
 
     // Getters and setters
@@ -67,12 +73,28 @@ public final class MiningContext {
     public int getMaxItemId() { return maxItemId; }
     public void setMaxItemId(int maxItemId) { this.maxItemId = maxItemId; }
 
+    // Dense mapping getters/setters (NEW)
+    public int[] getItemIdToDenseIndex() { return itemIdToDenseIndex; }
+    public void setItemIdToDenseIndex(int[] mapping) { this.itemIdToDenseIndex = mapping; }
+
+    public int[] getDenseIndexToItemId() { return denseIndexToItemId; }
+    public void setDenseIndexToItemId(int[] mapping) { this.denseIndexToItemId = mapping; }
+
+    public int getDenseSize() { return denseSize; }
+    public void setDenseSize(int denseSize) { this.denseSize = denseSize; }
+
     /**
      * Computes EP for an item from stored log-complement.
      */
-    public double getEP(int item) {
-        if (item < 0 || item > maxItemId || itemLogComp == null) return 0.0;
-        double lc = itemLogComp[item];
+    public double getEP(int itemId) {
+        if (itemId < 0 || itemId > maxItemId || itemLogComp == null) return 0.0;
+        if (itemIdToDenseIndex == null) return 0.0;
+
+        // CHANGE: Translate item ID to dense index before array access
+        int denseIdx = itemIdToDenseIndex[itemId];
+        if (denseIdx < 0) return 0.0;  // item not in profit table
+
+        double lc = itemLogComp[denseIdx];  // CHANGE: use denseIdx
         return (lc <= -700.0) ? 1.0 : 1.0 - Math.exp(lc);
     }
 
@@ -90,7 +112,7 @@ public final class MiningContext {
     }
 
     public TopKCollectorInterface getCollector() { return collector; }  // Return interface type
-    public TwoThresholdCoordinator getThresholdCoordinator() {
+    public ThresholdCoordinator getThresholdCoordinator() {
         return thresholdCoordinator;
     }
 }

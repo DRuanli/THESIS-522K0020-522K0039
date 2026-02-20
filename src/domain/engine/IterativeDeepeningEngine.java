@@ -41,7 +41,6 @@ public final class IterativeDeepeningEngine implements SearchEngine {
     private final TopKCollectorInterface collector;
     private final List<Integer> sortedItems;
     private final Map<Integer, UtilityProbabilityList> singleItemLists;
-    private final double initialThreshold;
 
     /**
      * Constructs an Iterative Deepening DFS engine with the specified mining parameters.
@@ -49,25 +48,22 @@ public final class IterativeDeepeningEngine implements SearchEngine {
      * @param minProbability      minimum EP threshold (patterns with EP < this are pruned)
      * @param ptwuPruningEnabled  whether to enable PTWU-based pruning (true for better performance)
      * @param joiner              UPU-List join strategy (TwoPointer, ExponentialSearch, BinarySearch)
-     * @param collector           Top-K pattern collector (maintains K best patterns, admission threshold)
+     * @param collector           Top-K pattern collector (maintains K best patterns, dynamic threshold)
      * @param itemRanking         item ranking by PTWU ascending (defines canonical extension order)
      * @param singleItemLists     UPU-Lists for all valid single items (used for joins)
-     * @param initialThreshold    initial admission threshold (0.0 at startup, raised as patterns collected)
      */
     public IterativeDeepeningEngine(double minProbability,
                                      boolean ptwuPruningEnabled,
                                      UPUListJoinerInterface joiner,
                                      TopKCollectorInterface collector,
                                      ItemRanking itemRanking,
-                                     Map<Integer, UtilityProbabilityList> singleItemLists,
-                                     double initialThreshold) {
+                                     Map<Integer, UtilityProbabilityList> singleItemLists) {
         this.minProbability = minProbability;
         this.ptwuPruningEnabled = ptwuPruningEnabled;
         this.joiner = joiner;
         this.collector = collector;
         this.sortedItems = itemRanking.getSortedItems();
         this.singleItemLists = singleItemLists;
-        this.initialThreshold = initialThreshold;
     }
 
     @Override

@@ -26,30 +26,27 @@ import java.util.concurrent.RecursiveAction;
  *
  * <h3>Prefix pruning</h3>
  * Before invoking the search engine on a prefix, its PTWU is checked against the
- * <em>initial</em> threshold (from {@link TwoThresholdCoordinator}) to avoid
+ * current dynamic threshold (from {@link ThresholdCoordinator}) to avoid
  * starting work on subtrees that cannot contribute to the top-k result.
  *
- * <p>The {@code globalCutoff} pre-computed index ensures only items ranked above
- * the initial threshold are used as extensions (O(1) vs O(log n) binary search
- * per prefix).
+ * <p>Since the threshold increases monotonically as better patterns are found,
+ * more aggressive pruning occurs naturally over time. This is provably safe:
+ * if PTWU(prefix) &lt; threshold, then all patterns in the subtree have
+ * EU ≤ PTWU(prefix) &lt; threshold, so none can qualify.
  *
  * <p><b>Search strategy polymorphism:</b> This task works with any {@link SearchEngine}
  * implementation (DFS, BFS, Best-First, IDDFS, etc.) via the {@code SearchEngine} interface.
  */
 public final class PrefixMiningTask extends RecursiveAction {
 
-    private static final long serialVersionUID = 1L;
-
     private final SearchEngine engine;
     private final ItemRanking itemRanking;
     private final Map<Integer, UtilityProbabilityList> singleItemLists;
-    private final TwoThresholdCoordinator thresholdCoordinator;
+    private final ThresholdCoordinator thresholdCoordinator;
     /** Inclusive start of the item-index range this task is responsible for. */
     private final int rangeStart;
     /** Exclusive end of the item-index range this task is responsible for. */
     private final int rangeEnd;
-    /** Pre-computed first item index whose PTWU exceeds the initial threshold. */
-    private final int globalCutoff;
     private final int fineGrainThreshold;
 
     /**
@@ -58,18 +55,16 @@ public final class PrefixMiningTask extends RecursiveAction {
      * @param engine               search engine executing the prefix-growth exploration (any strategy)
      * @param itemRanking          total item order (PTWU ascending)
      * @param singleItemLists      UPU-Lists for single-item prefixes
-     * @param thresholdCoordinator two-threshold state shared across all tasks
+     * @param thresholdCoordinator threshold coordinator providing dynamic threshold access
      * @param rangeStart           inclusive start index in {@code itemRanking.getSortedItems()}
      * @param rangeEnd             exclusive end index
-     * @param globalCutoff         first item index whose PTWU exceeds the initial threshold
      * @param fineGrainThreshold   range size at which per-item task decomposition begins
      */
     public PrefixMiningTask(SearchEngine engine,
                            ItemRanking itemRanking,
                            Map<Integer, UtilityProbabilityList> singleItemLists,
-                           TwoThresholdCoordinator thresholdCoordinator,
+                           ThresholdCoordinator thresholdCoordinator,
                            int rangeStart, int rangeEnd,
-                           int globalCutoff,
                            int fineGrainThreshold) {
         this.engine = engine;
         this.itemRanking = itemRanking;
@@ -77,7 +72,6 @@ public final class PrefixMiningTask extends RecursiveAction {
         this.thresholdCoordinator = thresholdCoordinator;
         this.rangeStart = rangeStart;
         this.rangeEnd = rangeEnd;
-        this.globalCutoff = globalCutoff;
         this.fineGrainThreshold = fineGrainThreshold;
     }
 
@@ -153,30 +147,25 @@ public final class PrefixMiningTask extends RecursiveAction {
      * Executes pattern mining for a single prefix item.
      *
      * <p>This method is called from the base case of {@link #compute()} when a task
-     * is responsible for mining a single prefix. It performs several optimizations
-     * and pruning checks before delegating to the search engine.
+     * is responsible for mining a single prefix. It performs pruning checks before
+     * delegating to the search engine.
      *
      * <h3>Execution Steps</h3>
      * <ol>
      *   <li><b>Retrieve prefix UPU-List</b> — Get the single-item list for this prefix</li>
      *   <li><b>Null/empty check</b> — Skip if list wasn't created (filtered in Phase 1d)</li>
-     *   <li><b>PTWU pruning</b> — Check if prefix PTWU is below initial threshold
+     *   <li><b>PTWU pruning</b> — Check if prefix PTWU is below current dynamic threshold
      *       (if so, all supersets will also be below threshold due to monotone property)</li>
-     *   <li><b>Compute extension start index</b> — Use max(prefixIndex+1, globalCutoff)
-     *       to skip low-PTWU items (O(1) optimization vs. binary search)</li>
      *   <li><b>Delegate to search engine</b> — Execute configured search strategy
      *       (DFS, BFS, BestFirst, IDDFS) on extensions of this prefix</li>
      * </ol>
      *
-     * <h3>Global Cutoff Optimization</h3>
-     * <p>The {@code globalCutoff} index is pre-computed once at the root task and
-     * represents the first item whose PTWU exceeds the initial threshold. By using
-     * {@code Math.max(prefixIndex + 1, globalCutoff)}, we ensure that:
-     * <ul>
-     *   <li>Extensions only consider items with rank > prefixIndex (canonical ordering)</li>
-     *   <li>Extensions only consider items with PTWU ≥ initial threshold (pruning)</li>
-     *   <li>No binary search needed per prefix (O(1) vs. O(log n))</li>
-     * </ul>
+     * <h3>Dynamic Threshold Pruning</h3>
+     * <p>Uses the current dynamic threshold for aggressive pruning. As better patterns
+     * are discovered by other threads, the threshold rises, causing more prefixes to
+     * be pruned. This is provably safe: if PTWU(prefix) &lt; threshold, then all
+     * patterns in the prefix's subtree have EU ≤ PTWU(prefix) &lt; threshold, so
+     * none can qualify for top-k.
      *
      * @param prefixIndex index of the prefix item in {@code itemRanking.getSortedItems()}
      */
@@ -189,19 +178,15 @@ public final class PrefixMiningTask extends RecursiveAction {
         // Skip if UPU-List doesn't exist or is empty (filtered out in Phase 1d)
         if (prefixList == null || prefixList.entryCount == 0) return;
 
-        // PTWU pruning: if prefix PTWU < initial threshold, all supersets also fail
+        // PTWU pruning: if prefix PTWU < current dynamic threshold, all supersets also fail
         // (monotone upper bound property - no point exploring extensions)
         if (thresholdCoordinator.shouldPrunePrefix(prefixList.ptwu)) {
             return;
         }
 
-        // Compute extension start index using global cutoff optimization
-        // max(prefixIndex + 1, globalCutoff) ensures:
-        //   1. Only extend with items ranked higher (canonical order)
-        //   2. Only extend with items having PTWU >= initial threshold (pruning)
-        int startIndex = Math.max(prefixIndex + 1, globalCutoff);
-
-        // Delegate to search engine if there are valid extension candidates
+        // Delegate to search engine to explore extensions
+        // Only extend with items ranked higher (canonical order: prefixIndex + 1)
+        int startIndex = prefixIndex + 1;
         if (startIndex < sortedItems.size()) {
             engine.exploreExtensions(prefixList, startIndex);
         }
@@ -211,8 +196,8 @@ public final class PrefixMiningTask extends RecursiveAction {
      * Creates a child subtask for a sub-range of this task's item range.
      *
      * <p>All immutable parameters (engine, itemRanking, singleItemLists, thresholdCoordinator,
-     * globalCutoff, fineGrainThreshold) are shared across all subtasks. Only the range
-     * boundaries (start, end) differ for each child task.
+     * fineGrainThreshold) are shared across all subtasks. Only the range boundaries (start, end)
+     * differ for each child task.
      *
      * @param start inclusive start index for the child task's item range
      * @param end   exclusive end index for the child task's item range
@@ -220,7 +205,7 @@ public final class PrefixMiningTask extends RecursiveAction {
      */
     private PrefixMiningTask createSubtask(int start, int end) {
         return new PrefixMiningTask(engine, itemRanking, singleItemLists,
-                                   thresholdCoordinator, start, end, globalCutoff,
+                                   thresholdCoordinator, start, end,
                                    fineGrainThreshold);
     }
 }

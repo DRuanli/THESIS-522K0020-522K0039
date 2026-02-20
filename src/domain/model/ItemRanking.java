@@ -74,16 +74,20 @@ public class ItemRanking {
      *
      * <p>This constructor builds the optimized rank-lookup array and PTWU array
      * from the provided sorted item list. It is called only by the static factory
-     * method {@link #fromPTWUArray(double[], Set, int)}.
+     * method {@link #fromPTWUArray(double[], Set, int[], int[], int)}.
      *
-     * @param sortedItems items already sorted by PTWU ascending (with ties broken by item ID)
-     * @param ptwuArray   full PTWU array indexed by item ID (from Phase 1)
-     * @param maxItemId   maximum item ID in the dataset (determines array size)
+     * @param sortedItems         items already sorted by PTWU ascending (with ties broken by item ID)
+     * @param densePtwuArray      dense PTWU array indexed by dense index (from Phase 1)
+     * @param denseIndexToItemId  mapping from dense index to item ID
+     * @param itemIdToDenseIndex  mapping from item ID to dense index (or -1)
+     * @param maxItemId           maximum item ID in the dataset (determines array size)
      */
-    private ItemRanking(List<Integer> sortedItems, double[] ptwuArray, int maxItemId) {
+    private ItemRanking(List<Integer> sortedItems, double[] densePtwuArray,
+                       int[] denseIndexToItemId, int[] itemIdToDenseIndex, int maxItemId) {
         this.sortedItems = Collections.unmodifiableList(new ArrayList<>(sortedItems));
 
         // Build array-based rank lookup and PTWU array
+        // rankByItemId STAYS SPARSE for O(1) getRank(itemId) performance
         this.rankByItemId = new int[maxItemId + 1];
         Arrays.fill(rankByItemId, -1);  // Default: item not ranked
 
@@ -91,85 +95,70 @@ public class ItemRanking {
 
         for (int i = 0; i < sortedItems.size(); i++) {
             int itemId = sortedItems.get(i);
-            rankByItemId[itemId] = i;                        // O(1) direct array assignment
-            ptwuValues[i] = (itemId <= maxItemId) ? ptwuArray[itemId] : 0.0;  // Direct array access
+            rankByItemId[itemId] = i;  // O(1) direct array assignment
+
+            // CHANGE: Translate item ID to dense index before array access
+            int denseIdx = itemIdToDenseIndex[itemId];
+            ptwuValues[i] = (denseIdx >= 0) ? densePtwuArray[denseIdx] : 0.0;
         }
     }
 
     /**
-     * Constructs an {@code ItemRanking} from a PTWU array and a set of valid items. (a part of step 1c)
+     * Constructs an {@code ItemRanking} from a dense PTWU array and a set of valid items. (a part of step 1c)
      *
      * <p>Only items present in {@code validItems} are included in the ranking
      * (items filtered out in Phase 1 by the EP threshold are excluded).
      *
-     * @param ptwuArray  array of PTWU values indexed by item ID (computed in Phase 1)
-     * @param validItems subset of item IDs that pass the minimum EP threshold
-     * @param maxItemId  maximum item ID in the dataset (array size = maxItemId + 1)
+     * @param densePtwuArray      dense array of PTWU values indexed by dense index (computed in Phase 1)
+     * @param validItems          subset of item IDs that pass the minimum EP threshold
+     * @param itemIdToDenseIndex  mapping from item ID to dense index (or -1)
+     * @param denseIndexToItemId  mapping from dense index to item ID
+     * @param maxItemId           maximum item ID in the dataset (array size = maxItemId + 1)
      * @return {@code ItemRanking} with items sorted by PTWU ascending, ties broken by item ID
      */
-    /*
-    public static ItemRanking fromPTWUArray(double[] ptwuArray,
-                                           Set<Integer> validItems,
-                                           int maxItemId) {
-        List<Integer> sorted = validItems.stream()
-            
-            .filter(item -> {
-                // Filter out items with PTWU <= 0
-                double ptwu = (item <= maxItemId) ? ptwuArray[item] : 0.0;
-                return ptwu > 0.0;
-            })
-            
-            .sorted((a, b) -> {
-                double ptwuA = (a <= maxItemId) ? ptwuArray[a] : 0.0;
-                double ptwuB = (b <= maxItemId) ? ptwuArray[b] : 0.0;
-                int c = Double.compare(ptwuA, ptwuB);
-                return (c != 0) ? c : Integer.compare(a, b);
-            })
-            .collect(Collectors.toList());
-        return new ItemRanking(sorted, ptwuArray, maxItemId);
-    }
-    */
-
-    public static ItemRanking fromPTWUArray(double[] ptwuArray,
+    public static ItemRanking fromPTWUArray(double[] densePtwuArray,
                                         Set<Integer> validItems,
+                                        int[] itemIdToDenseIndex,
+                                        int[] denseIndexToItemId,
                                         int maxItemId) {
         Integer[] candidates = new Integer[validItems.size()];
         int count = 0;
 
         // 2. Filter Loop
-        // We know that if (item > maxItemId), ptwu is 0.0.
-        // Since we only want ptwu > 0, we can drop any item > maxItemId immediately.
-        // This allows us to skip the bounds check inside the sort later.
-        /*
+        // Filter out items with PTWU <= 0, using dense index translation
         for (Integer item : validItems) {
-            // Null check is good practice with Sets of Integers, though usually not needed if data is clean
+            // Null check is good practice with Sets of Integers
             if (item != null && item <= maxItemId) {
-                // Direct array access is safe here because of the check above
-                if (ptwuArray[item] > 0.0) {
+                // CHANGE: Translate item ID to dense index before array access
+                int denseIdx = itemIdToDenseIndex[item];
+                if (denseIdx >= 0 && densePtwuArray[denseIdx] > 0.0) {
                     candidates[count++] = item;
                 }
             }
         }
-        */
 
         // 3. Sort
         // We sort only the filled portion of the array (0 to count).
         Arrays.sort(candidates, 0, count, (a, b) -> {
-            // No need to check (item <= maxItemId) here; the filter step guaranteed it.
-            double pA = ptwuArray[a];
-            double pB = ptwuArray[b];
+            // CHANGE: Translate item IDs to dense indices before array access
+            int denseIdxA = itemIdToDenseIndex[a];
+            int denseIdxB = itemIdToDenseIndex[b];
+
+            double pA = densePtwuArray[denseIdxA];
+            double pB = densePtwuArray[denseIdxB];
 
             if (pA < pB) return -1;
             if (pA > pB) return 1;
-            
+
             // Tie-breaker: sort by Item ID
-            return a - b; 
+            return a - b;
         });
 
         // 4. Create the final list
         List<Integer> sorted = Arrays.asList(Arrays.copyOf(candidates, count));
 
-        return new ItemRanking(sorted, ptwuArray, maxItemId);
+        return new ItemRanking(sorted, densePtwuArray, denseIndexToItemId,
+                              itemIdToDenseIndex, maxItemId);
     }
 
 

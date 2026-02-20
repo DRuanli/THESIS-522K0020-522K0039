@@ -1,6 +1,5 @@
 package domain.collection;
 
-import domain.engine.PatternCollector;
 import domain.model.HighUtilityPattern;
 import domain.model.UtilityProbabilityList;
 

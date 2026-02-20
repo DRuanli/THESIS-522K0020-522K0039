@@ -7,6 +7,7 @@ import domain.model.*;
 import infrastructure.builder.UPUListBuilder;
 import infrastructure.computation.PTWUCalculator;
 import infrastructure.parallel.PrefixMiningTask;
+import infrastructure.parallel.ThresholdCoordinator;
 
 import java.util.*;
 import java.util.concurrent.ForkJoinPool;
@@ -110,7 +111,11 @@ public final class MiningOrchestrator {
         // Step 1c: Rank valid items by PTWU ascending for canonical pattern growth order
         // This ordering enables both pruning (low PTWU items first) and duplicate prevention
         ItemRanking ranking = ItemRanking.fromPTWUArray(
-            phase1Result.ptwu, context.getValidItems(), phase1Result.maxItemId);
+            phase1Result.ptwu,
+            context.getValidItems(),
+            phase1Result.itemIdToDenseIndex,
+            phase1Result.denseIndexToItemId,
+            phase1Result.maxItemId);
         context.setItemRanking(ranking);
 
         // Step 1d: Build UPU-Lists for all valid single items (Phase 1d-a + 1d-b)
@@ -145,14 +150,19 @@ public final class MiningOrchestrator {
      * @param phase1Result  PTWU computation result from Phase 1
      */
     private void storePhase1Results(MiningContext context, PTWUCalculator.PTWUComputationResult phase1Result) {
-        // Store PTWU array (used for pruning during pattern growth)
+        // Store dense PTWU array (used for pruning during pattern growth)
         context.setItemPTWU(phase1Result.ptwu);
 
-        // Store log-complement array (used for on-demand EP computation)
+        // Store dense log-complement array (used for on-demand EP computation)
         context.setItemLogComp(phase1Result.logComp);
 
         // Store max item ID (determines array sizes throughout mining)
         context.setMaxItemId(phase1Result.maxItemId);
+
+        // Store dense index mapping (NEW)
+        context.setItemIdToDenseIndex(phase1Result.itemIdToDenseIndex);
+        context.setDenseIndexToItemId(phase1Result.denseIndexToItemId);
+        context.setDenseSize(phase1Result.denseSize);
 
         // Filter items by minimum EP threshold
         // Items with EP < minProbability are unreliable 
@@ -218,13 +228,9 @@ public final class MiningOrchestrator {
             }
         }
 
-        // Step 2b: Capture initial threshold for mining phase
-        // If the k > valid single-itemset -> intial threshold = 0.0
-        context.getThresholdCoordinator().captureInitialThreshold();
-
         if (config.isDebugMode()) {
-            System.err.printf("  Initial threshold captured: %.4f%n",
-                context.getThresholdCoordinator().getInitialThreshold());
+            System.err.printf("  Initial admission threshold: %.4f%n",
+                collector.getAdmissionThreshold());
         }
     }
 
@@ -262,23 +268,17 @@ public final class MiningOrchestrator {
         // and join strategy (TwoPointer, ExponentialSearch, BinarySearch)
         SearchEngine engine = createEngine(context);
 
-        // Compute global cutoff: first index where PTWU >= initialThreshold
-        // All items with rank < globalCutoff have PTWU below threshold and can be safely pruned
-        // This optimization skips low-utility items entirely (no work stealing needed for them)
-        int globalCutoff = context.getItemRanking().findFirstIndexAboveThreshold(
-            context.getThresholdCoordinator().getInitialThreshold());
-
         // Create root ForkJoin task that will recursively split the prefix range
         // Task splits until reaching FINE_GRAIN_THRESHOLD prefixes (16 by default)
         // Each worker thread steals tasks from the queue using work-stealing algorithm
+        // Dynamic threshold pruning occurs at each prefix check - more aggressive as mining progresses
         PrefixMiningTask rootTask = new PrefixMiningTask(
             engine,                                         // Search strategy to use
             context.getItemRanking(),                       // Item ranking (PTWU ascending)
             context.getSingleItemLists(),                   // Single-item UPU-Lists
-            context.getThresholdCoordinator(),              // Thread-safe threshold coordinator
+            context.getThresholdCoordinator(),              // Threshold coordinator (dynamic)
             0,                                              // Start index (first prefix)
             context.getItemRanking().size(),                // End index (last prefix + 1)
-            globalCutoff,                                   // Skip prefixes below this index
             FINE_GRAIN_THRESHOLD                            // Stop splitting at 16 prefixes
         );
 
@@ -295,36 +295,25 @@ public final class MiningOrchestrator {
         // Create search engine with configured strategy and joiner
         SearchEngine engine = createEngine(context);
 
-        // Compute global cutoff: first index where PTWU >= initialThreshold
-        // Items ranked below this cutoff can never form high-utility patterns
-        int globalCutoff = context.getItemRanking().findFirstIndexAboveThreshold(
-            context.getThresholdCoordinator().getInitialThreshold());
-
         // Cache frequently accessed context data for performance
-        List<Integer> sortedItems = context.getItemRanking().getSortedItems(); // All ranked item in PTWU-asc-order
-        Map<Integer, UtilityProbabilityList> singleItemLists = context.getSingleItemLists(); // Access pre-compute UPUList 
-        double initialThreshold = context.getThresholdCoordinator().getInitialThreshold(); // initial threshold in Phase 2
+        List<Integer> sortedItems = context.getItemRanking().getSortedItems();
+        Map<Integer, UtilityProbabilityList> singleItemLists = context.getSingleItemLists();
+        ThresholdCoordinator thresholdCoordinator = context.getThresholdCoordinator();
 
         // Process each prefix sequentially in PTWU-ascending order
-        // Starting from globalCutoff skips low-utility items entirely
-        for (int i = globalCutoff; i < sortedItems.size(); i++) {
+        for (int i = 0; i < sortedItems.size(); i++) {
             int prefixItem = sortedItems.get(i);
 
-            // Access pre-compute UPUList by the current proccesed item
+            // Access pre-computed UPU-List for the current item
             UtilityProbabilityList prefixList = singleItemLists.get(prefixItem);
 
             // Skip if UPU-List wasn't created (item was filtered in Phase 1d)
             if (prefixList == null || prefixList.entryCount == 0) continue;
 
-            // PTWU pruning: if prefix PTWU < threshold, all supersets also have PTWU < threshold
+            // PTWU pruning: if prefix PTWU < current dynamic threshold, all supersets also fail
             // This is the monotone upper bound property of PTWU
-            if (prefixList.ptwu < initialThreshold - EPSILON) continue;
-
-            // Evaluate this 1-itemset as a potential high-utility pattern
-            // Check both EP threshold (reliability) and EU threshold (profitability)
-            if (prefixList.existentialProbability >= config.getMinProbability() - EPSILON) {
-                context.getCollector().tryCollect(prefixList);
-            }
+            // Threshold increases as better patterns are discovered, enabling more aggressive pruning
+            if (thresholdCoordinator.shouldPrunePrefix(prefixList.ptwu)) continue;
 
             // Recursively explore extensions of this prefix
             // Only consider items at positions > i to maintain canonical order and avoid duplicates
@@ -346,8 +335,7 @@ public final class MiningOrchestrator {
             joiner,
             context.getCollector(),
             context.getItemRanking(),
-            context.getSingleItemLists(),
-            context.getThresholdCoordinator().getInitialThreshold()
+            context.getSingleItemLists()
         );
     }
 

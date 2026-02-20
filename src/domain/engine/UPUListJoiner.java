@@ -36,8 +36,9 @@ import static infrastructure.util.NumericalConstants.*;
  *   EP(X ∪ {j}) = 1 − exp(Σ_T log(1 − P(X ∪ {j}, T)))
  * </pre>
  *
- * <p><b>Early pruning:</b> if the joined PTWU falls below {@code initialThreshold},
- * the join is aborted immediately and {@code null} is returned.
+ * <p><b>Early pruning:</b> if the joined PTWU falls below the dynamic threshold,
+ * the join is aborted immediately and {@code null} is returned. This is safe because
+ * PTWU is an upper bound on EU.
  *
  * <p><b>Thread safety:</b> instances are stateless and may be shared across threads.
  * Input UPU-Lists are read-only (immutable after construction).
@@ -50,17 +51,17 @@ public final class UPUListJoiner implements UPUListJoinerInterface {
      * @param list1            UPU-List of the prefix itemset {@code X}
      * @param list2            UPU-List of the single-item extension {@code {j}}
      * @param extensionItem    item ID of {@code j}; passed directly to avoid iterating {@code list2.itemset}
-     * @param initialThreshold the static Phase 2 threshold; join is pruned if joined PTWU &lt; threshold
+     * @param threshold        current dynamic threshold; join is pruned if joined PTWU &lt; threshold
      * @return the joined UPU-List {@code L(X ∪ {j})}, or {@code null} if the result is empty
-     *         or pruned by the initial threshold
+     *         or pruned by threshold
      */
     public UtilityProbabilityList join(UtilityProbabilityList list1,
                                        UtilityProbabilityList list2,
                                        int extensionItem,
-                                       double initialThreshold) {
+                                       double threshold) {
         double joinedPTWU = Math.min(list1.ptwu, list2.ptwu);
 
-        if (joinedPTWU < initialThreshold - EPSILON) {
+        if (joinedPTWU < threshold - EPSILON) {
             return null;
         }
 

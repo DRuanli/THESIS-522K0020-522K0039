@@ -1,6 +1,5 @@
 package domain.collection;
 
-import domain.engine.PatternCollector;
 import domain.model.HighUtilityPattern;
 import domain.model.UtilityProbabilityList;
 
@@ -30,13 +29,27 @@ import java.util.List;
  * multiple mining threads.
  *
  * @see TopKPatternCollector
- * @see PatternCollector
  */
-public interface TopKCollectorInterface extends PatternCollector {
+public interface TopKCollectorInterface {
 
-    // Inherited from PatternCollector:
-    // boolean tryCollect(UtilityProbabilityList candidate);
-    // List<HighUtilityPattern> getCollectedPatterns();
+    /**
+     * Attempts to admit a candidate pattern to the Top-K collection.
+     *
+     * <p>If the candidate's EU exceeds the current admission threshold and
+     * the collector is at capacity, the weakest pattern is evicted.
+     * Thread-safe implementations must guard the entire check-and-swap under a lock.
+     *
+     * @param candidate UPU-List of the candidate pattern
+     * @return {@code true} if the pattern was admitted or updated; {@code false} otherwise
+     */
+    boolean tryCollect(UtilityProbabilityList candidate);
+
+    /**
+     * Returns all collected patterns in descending EU order.
+     *
+     * @return snapshot of the current Top-K patterns
+     */
+    List<HighUtilityPattern> getCollectedPatterns();
 
     /**
      * Returns the current admission threshold (k-th largest EU).

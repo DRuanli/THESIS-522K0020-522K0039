@@ -110,8 +110,10 @@ public final class UPUListBuilder {
 
         ConcurrentHashMap<Integer, UtilityProbabilityList> lists = new ConcurrentHashMap<>();
         List<Integer> sortedItems = context.getItemRanking().getSortedItems();
-        double[] ptwuArray = context.getItemPTWU();
+        double[] ptwuArray = context.getItemPTWU();  // NOW: dense array
         int maxItemId = context.getMaxItemId();
+        int[] itemIdToDenseIndex = context.getItemIdToDenseIndex();  // NEW
+        int denseSize = context.getDenseSize();  // NEW
 
         java.util.function.Consumer<Integer> buildOne = item -> {
             List<UtilityProbabilityList.TransactionEntry> entries = itemEntries.get(item);
@@ -119,14 +121,22 @@ public final class UPUListBuilder {
 
             Set<Integer> itemset = Collections.singleton(item);
 
-            // Direct array access for PTWU (5x faster than HashMap)
+            // Validate item ID bounds
             if (item < 0 || item > maxItemId) {
                 throw new IllegalStateException(
                     "Item " + item + " exceeds maxItemId " + maxItemId +
                     " during UPU-List construction");
             }
 
-            double ptwu = ptwuArray[item];
+            // CHANGE: Translate item ID to dense index before array access
+            int denseIdx = itemIdToDenseIndex[item];
+            if (denseIdx < 0 || denseIdx >= denseSize) {
+                throw new IllegalStateException(
+                    "Item " + item + " has invalid dense index " + denseIdx +
+                    " (denseSize=" + denseSize + ")");
+            }
+
+            double ptwu = ptwuArray[denseIdx];  // CHANGE: use dense index
             if (ptwu <= 0.0) {
                 throw new IllegalStateException(
                     "PTWU missing for item " + item + " during UPU-List construction. " +
@@ -214,8 +224,10 @@ public final class UPUListBuilder {
 
         Map<Integer, UtilityProbabilityList> lists = new HashMap<>();
         List<Integer> sortedItems = context.getItemRanking().getSortedItems();
-        double[] ptwuArray = context.getItemPTWU();
+        double[] ptwuArray = context.getItemPTWU();  // NOW: dense array
         int maxItemId = context.getMaxItemId();
+        int[] itemIdToDenseIndex = context.getItemIdToDenseIndex();  // NEW
+        int denseSize = context.getDenseSize();  // NEW
 
         for (int item : sortedItems) {
             List<UtilityProbabilityList.TransactionEntry> entries = itemEntries.get(item);
@@ -223,14 +235,22 @@ public final class UPUListBuilder {
 
             Set<Integer> itemset = Collections.singleton(item);
 
-            // Direct array access for PTWU
+            // Validate item ID bounds
             if (item < 0 || item > maxItemId) {
                 throw new IllegalStateException(
                     "Item " + item + " exceeds maxItemId " + maxItemId +
                     " during UPU-List construction");
             }
 
-            double ptwu = ptwuArray[item];
+            // CHANGE: Translate item ID to dense index before array access
+            int denseIdx = itemIdToDenseIndex[item];
+            if (denseIdx < 0 || denseIdx >= denseSize) {
+                throw new IllegalStateException(
+                    "Item " + item + " has invalid dense index " + denseIdx +
+                    " (denseSize=" + denseSize + ")");
+            }
+
+            double ptwu = ptwuArray[denseIdx];  // CHANGE: use dense index
             if (ptwu <= 0.0) {
                 throw new IllegalStateException(
                     "PTWU missing for item " + item + " during UPU-List construction. " +

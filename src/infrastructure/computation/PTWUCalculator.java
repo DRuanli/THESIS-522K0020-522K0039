@@ -113,10 +113,17 @@ public class PTWUCalculator {
     private final ProfitTable profitTable;
     private final int maxItemId;
 
-    private final double[] profitCache;
+    // Dense index mapping for sparse item IDs
+    private final int denseSize;                    // Number of actual items
+    private final int[] itemIdToDenseIndex;         // sparse[maxItemId+1] -> dense index or -1
+    private final int[] denseIndexToItemId;         // dense[denseSize] -> item ID
+
+    private final double[] profitCache;             // NOW: dense[denseSize]
 
     public PTWUCalculator(ProfitTable profitTable) {
         this.profitTable = profitTable;
+
+        // Step 1: Compute maxItemId (unchanged for backward compatibility)
         int max = 0;
         for (int id: profitTable.getAllItems()) {
             if (id > max) {
@@ -125,9 +132,25 @@ public class PTWUCalculator {
         }
         this.maxItemId = max;
 
-        this.profitCache = new double[maxItemId + 1];
-        for (int id : profitTable.getAllItems()) {
-            profitCache[id] = profitTable.getProfit(id);
+        // Step 2: Build dense index mapping
+        Set<Integer> allItems = profitTable.getAllItems();
+        this.denseSize = allItems.size();
+        this.itemIdToDenseIndex = new int[maxItemId + 1];
+        Arrays.fill(itemIdToDenseIndex, -1);  // -1 = not in profit table
+        this.denseIndexToItemId = new int[denseSize];
+
+        int denseIdx = 0;
+        for (int itemId : allItems) {
+            itemIdToDenseIndex[itemId] = denseIdx;
+            denseIndexToItemId[denseIdx] = itemId;
+            denseIdx++;
+        }
+
+        // Step 3: Build dense profit cache
+        this.profitCache = new double[denseSize];
+        for (int denseIndex = 0; denseIndex < denseSize; denseIndex++) {
+            int itemId = denseIndexToItemId[denseIndex];
+            profitCache[denseIndex] = profitTable.getProfit(itemId);
         }
     }
 
@@ -138,6 +161,15 @@ public class PTWUCalculator {
      */
     public int getMaxItemId() {
         return maxItemId;
+    }
+
+    /**
+     * Returns the number of items in the profit table (dense size).
+     *
+     * @return number of actual items
+     */
+    public int getDenseSize() {
+        return denseSize;
     }
 
     /**
@@ -155,46 +187,72 @@ public class PTWUCalculator {
      */
     public static final class PTWUComputationResult {
         /**
-         * PTWU per item: array indexed by item ID (0 if item not present)
+         * PTWU per item: dense array indexed by dense index (size = denseSize)
          */
         public final double[] ptwu;
 
         /**
-         * Log-complement for EP computation: array indexed by item ID
+         * Log-complement for EP computation: dense array indexed by dense index (size = denseSize)
          */
         public final double[] logComp;
 
         /**
-         * Maximum item ID in the dataset (array size = maxItemId + 1)
+         * Maximum item ID in the dataset (kept for backward compatibility)
          */
         public final int maxItemId;
 
-        PTWUComputationResult(double[] ptwu, double[] logComp, int maxItemId) {
+        /**
+         * Sparse-to-dense mapping: sparse item ID -> dense index or -1
+         */
+        public final int[] itemIdToDenseIndex;
+
+        /**
+         * Dense-to-sparse mapping: dense index -> sparse item ID
+         */
+        public final int[] denseIndexToItemId;
+
+        /**
+         * Number of actual items (dense array size)
+         */
+        public final int denseSize;
+
+        PTWUComputationResult(double[] ptwu, double[] logComp, int maxItemId,
+                              int[] itemIdToDenseIndex, int[] denseIndexToItemId, int denseSize) {
             this.ptwu = ptwu;
             this.logComp = logComp;
             this.maxItemId = maxItemId;
+            this.itemIdToDenseIndex = itemIdToDenseIndex;
+            this.denseIndexToItemId = denseIndexToItemId;
+            this.denseSize = denseSize;
         }
 
         /**
          * Computes EP for an item on demand from log-complement.
          *
-         * @param item item ID
+         * @param itemId item ID
          * @return EP(item) ∈ [0, 1]
          */
-        public double getEP(int item) {
-            if (item < 0 || item > maxItemId) return 0.0;
-            double lc = logComp[item];
+        public double getEP(int itemId) {
+            if (itemId < 0 || itemId > maxItemId) return 0.0;
+            // CHANGE: Translate item ID to dense index before array access
+            int denseIdx = itemIdToDenseIndex[itemId];
+            if (denseIdx < 0) return 0.0;  // item not in profit table
+
+            double lc = logComp[denseIdx];  // CHANGE: use denseIdx
             return (lc <= LOG_ZERO) ? 1.0 : 1.0 - Math.exp(lc);
         }
 
         /**
          * Gets PTWU for an item.
          *
-         * @param item item ID
+         * @param itemId item ID
          * @return PTWU(item)
          */
-        public double getPTWU(int item) {
-            return (item >= 0 && item <= maxItemId) ? ptwu[item] : 0.0;
+        public double getPTWU(int itemId) {
+            if (itemId < 0 || itemId > maxItemId) return 0.0;
+            // CHANGE: Translate item ID to dense index before array access
+            int denseIdx = itemIdToDenseIndex[itemId];
+            return (denseIdx >= 0) ? ptwu[denseIdx] : 0.0;  // CHANGE: use denseIdx
         }
     }
 
@@ -226,7 +284,8 @@ public class PTWUCalculator {
      * @return combined PTWU and EP computation result for all items
      */
     public PTWUComputationResult computePhase1_Sequential(List<Transaction> database) {
-        int arraySize = maxItemId + 1;
+        // CHANGE: Use dense size instead of sparse maxItemId+1
+        int arraySize = denseSize;
         double[] ptwu = new double[arraySize];
         double[] logComp = new double[arraySize];
 
@@ -235,30 +294,38 @@ public class PTWUCalculator {
             double ptu = 0.0;
 
             // First pass: compute PTU and accumulate log-complement
-            for (int item : items) {
-                if (item > maxItemId) continue;
+            for (int itemId : items) {  // renamed: item -> itemId for clarity
+                if (itemId < 0 || itemId > maxItemId) continue;
 
-                // Accumulate PTU (only positive profits contribute)
-                if (profitCache[item] > 0) {
-                    ptu += profitCache[item] * trans.getQuantity(item); // PTU formula, DEFINITION 7
+                // CHANGE: Translate item ID to dense index
+                int denseIdx = itemIdToDenseIndex[itemId];
+                if (denseIdx < 0) continue;  // item not in profit table
+
+                // CHANGE: Use denseIdx for array access
+                if (profitCache[denseIdx] > 0) {
+                    ptu += profitCache[denseIdx] * trans.getQuantity(itemId); // PTU formula, DEFINITION 7
                 }
 
-                // Accumulate EP log-complement
-                // Previously it has it own loop, but I have merge with ptwu for optimization
-                logComp[item] += ProbabilityModel.logComplement(trans.getProbability(item)); // DEFINITION 3b
+                // CHANGE: Use denseIdx for logComp accumulation
+                logComp[denseIdx] += ProbabilityModel.logComplement(trans.getProbability(itemId)); // DEFINITION 3b
             }
 
             // Second pass: distribute PTU to all valid items
             // Note: Must be separate loop since we need complete PTU value first
-            for (int item : items) {
-                if (item <= maxItemId) {
-                    ptwu[item] += ptu; // PTWU, DEFINITION 7
+            for (int itemId : items) {
+                if (itemId < 0 || itemId > maxItemId) continue;
+
+                // CHANGE: Translate and check before array access
+                int denseIdx = itemIdToDenseIndex[itemId];
+                if (denseIdx >= 0) {
+                    ptwu[denseIdx] += ptu; // PTWU, DEFINITION 7
                 }
             }
         }
 
-        // EP is computed on-demand via getEP() to avoid storing twice
-        return new PTWUComputationResult(ptwu, logComp, maxItemId);
+        // CHANGE: Pass dense arrays and mapping to result
+        return new PTWUComputationResult(ptwu, logComp, maxItemId,
+                                          itemIdToDenseIndex, denseIndexToItemId, denseSize);
     }
 
     /**
@@ -273,10 +340,13 @@ public class PTWUCalculator {
      * @return combined PTWU and EP computation result for all items
      */
     public PTWUComputationResult computePhase1_Parallel(List<Transaction> database, ForkJoinPool executor) {
-        int arraySize = maxItemId + 1;
+        // CHANGE: Use dense size instead of sparse maxItemId+1
+        int arraySize = denseSize;
         Phase1ScanTask rootTask = new Phase1ScanTask(database, 0, database.size(), arraySize);
         Phase1Accumulator result = executor.invoke(rootTask);
-        return new PTWUComputationResult(result.ptwu, result.logComp, maxItemId);
+        // CHANGE: Pass mapping to result
+        return new PTWUComputationResult(result.ptwu, result.logComp, maxItemId,
+                                          itemIdToDenseIndex, denseIndexToItemId, denseSize);
     }
 
     /**
@@ -346,22 +416,30 @@ public class PTWUCalculator {
                 double ptu = 0.0;
 
                 // First pass: compute PTU and accumulate log-complement
-                for (int item : items) {
-                    if (item > maxItemId) continue;
+                for (int itemId : items) {  // renamed: item -> itemId for clarity
+                    if (itemId < 0 || itemId > maxItemId) continue;
 
-                    // Accumulate PTU (only positive profits contribute)
-                    if (profitCache[item] > 0) {
-                        ptu += profitCache[item] * trans.getQuantity(item);
+                    // CHANGE: Translate item ID to dense index
+                    int denseIdx = itemIdToDenseIndex[itemId];
+                    if (denseIdx < 0) continue;  // item not in profit table
+
+                    // CHANGE: Use denseIdx for array access
+                    if (profitCache[denseIdx] > 0) {
+                        ptu += profitCache[denseIdx] * trans.getQuantity(itemId);
                     }
 
-                    // Accumulate EP log-complement
-                    local.logComp[item] += ProbabilityModel.logComplement(trans.getProbability(item));
+                    // CHANGE: Use denseIdx for logComp accumulation
+                    local.logComp[denseIdx] += ProbabilityModel.logComplement(trans.getProbability(itemId));
                 }
 
                 // Second pass: distribute PTU to all valid items -> PTWU
-                for (int item : items) {
-                    if (item <= maxItemId) {
-                        local.ptwu[item] += ptu;
+                for (int itemId : items) {
+                    if (itemId < 0 || itemId > maxItemId) continue;
+
+                    // CHANGE: Translate and check before array access
+                    int denseIdx = itemIdToDenseIndex[itemId];
+                    if (denseIdx >= 0) {
+                        local.ptwu[denseIdx] += ptu;
                     }
                 }
             }

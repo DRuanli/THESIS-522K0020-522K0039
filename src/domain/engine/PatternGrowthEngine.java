@@ -21,17 +21,16 @@ import static infrastructure.util.NumericalConstants.EPSILON;
  *   <li><b>PUB pruning:</b> {@code PUB(X) < threshold} — prune subtree (tighter UB).</li>
  * </ol>
  *
- * <p><b>Two-threshold design:</b>
+ * <p><b>Dynamic threshold pruning:</b>
  * <ul>
- *   <li>{@code initialThreshold} (static, from Phase 4) is used for prefix PTWU checking
- *       and UPU-List join pruning, preventing race-condition incorrect pruning in parallel
- *       execution where one thread might raise the threshold while another starts its subtree.</li>
- *   <li>{@code collector.getAdmissionThreshold()} (dynamic, volatile) is read once per call for
- *       local candidate pruning.  A slightly stale (lower) value means less aggressive pruning
- *       but never incorrect results — correctness is enforced by {@code tryCollect()} under lock.</li>
+ *   <li>{@code collector.getAdmissionThreshold()} (dynamic, volatile) is read once per
+ *       recursive call and used for all pruning decisions within that call.</li>
+ *   <li>The threshold increases monotonically as better patterns are discovered.</li>
+ *   <li>More aggressive pruning over time - provably safe due to PTWU upper bound property.</li>
+ *   <li>If PTWU &lt; threshold, then EU ≤ PTWU &lt; threshold, so pattern cannot qualify.</li>
  * </ul>
  *
- * <p><b>Correctness guarantee:</b> EXACT. All non-pruned nodes are visited.
+ * <p><b>Correctness guarantee:</b> EXACT. All non-pruned nodes are visited. No false negatives.
  * <br><b>Memory:</b> O(depth) stack — most efficient among all engines.
  * <br><b>Traversal order:</b> lexicographic by PTWU-rank (no reordering).
  */
@@ -42,7 +41,6 @@ public final class PatternGrowthEngine implements SearchEngine {
     private final TopKCollectorInterface collector;
     private final List<Integer> sortedItems;
     private final Map<Integer, UtilityProbabilityList> singleItemLists;
-    private final double initialThreshold;
 
     /**
      * Constructs a DFS engine.
@@ -52,28 +50,23 @@ public final class PatternGrowthEngine implements SearchEngine {
      * @param collector        thread-safe Top-K pattern collector
      * @param itemRanking      PTWU-ascending item order
      * @param singleItemLists  single-item UPU-Lists (Phase 2 output)
-     * @param initialThreshold Phase 4 snapshot threshold used for subtree pruning
      */
     public PatternGrowthEngine(double minProbability,
                                UPUListJoinerInterface joiner,
                                TopKCollectorInterface collector,
                                ItemRanking itemRanking,
-                               Map<Integer, UtilityProbabilityList> singleItemLists,
-                               double initialThreshold) {
+                               Map<Integer, UtilityProbabilityList> singleItemLists) {
         this.minProbability = minProbability;
         this.joiner = joiner;
         this.collector = collector;
         this.sortedItems = itemRanking.getSortedItems();
         this.singleItemLists = singleItemLists;
-        this.initialThreshold = initialThreshold;
     }
 
     /**
      * Recursively explores all extensions of {@code prefix} in PTWU order.
      *
-     * <p>Uses {@code initialThreshold} to guard the subtree root, preventing
-     * expansion of prefixes that cannot produce any qualifying pattern.
-     * Uses the dynamic {@code admissionThreshold} for per-candidate admission checks,
+     * <p>Uses the dynamic {@code admissionThreshold} for all pruning and admission decisions,
      * refreshing it after each successful collection to exploit rising thresholds.
      *
      * @param prefix     UPU-List of the current prefix itemset

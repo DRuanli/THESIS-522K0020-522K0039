@@ -31,16 +31,16 @@ public final class UPUListJoiner_ExponentialSearch implements UPUListJoinerInter
      * @param list1            UPU-List of the prefix itemset {@code X}
      * @param list2            UPU-List of the single-item extension {@code {j}}
      * @param extensionItem    item ID of {@code j}
-     * @param initialThreshold the static Phase 3 threshold
+     * @param threshold        current dynamic threshold for early pruning
      * @return the joined UPU-List {@code L(X ∪ {j})}, or {@code null} if pruned
      */
     public UtilityProbabilityList join(UtilityProbabilityList list1,
                                        UtilityProbabilityList list2,
                                        int extensionItem,
-                                       double initialThreshold) {
+                                       double threshold) {
         double joinedPTWU = Math.min(list1.ptwu, list2.ptwu);
 
-        if (joinedPTWU < initialThreshold - EPSILON) {
+        if (joinedPTWU < threshold - EPSILON) {
             return null;
         }
 

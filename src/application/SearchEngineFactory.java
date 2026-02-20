@@ -77,10 +77,9 @@ public final class SearchEngineFactory {
      *
      * @param config           mining configuration with strategy selection
      * @param joiner           UPU-List join operator (any implementation)
-     * @param collector        thread-safe Top-K pattern collector
+     * @param collector        thread-safe Top-K pattern collector (provides dynamic threshold)
      * @param ranking          PTWU-ascending item order
      * @param singleItemLists  single-item UPU-Lists (Phase 2 output)
-     * @param initialThreshold Phase 4 snapshot threshold used for subtree pruning
      * @return the configured search engine
      * @throws UnsupportedOperationException if strategy is not yet implemented
      * @throws IllegalStateException if strategy is unknown
@@ -90,8 +89,7 @@ public final class SearchEngineFactory {
             UPUListJoinerInterface joiner,
             TopKCollectorInterface collector,
             ItemRanking ranking,
-            Map<Integer, UtilityProbabilityList> singleItemLists,
-            double initialThreshold) {
+            Map<Integer, UtilityProbabilityList> singleItemLists) {
 
         double minProb = config.getMinProbability();
         boolean ptwuPruningEnabled = true;  // Always enabled for all strategies
@@ -99,22 +97,22 @@ public final class SearchEngineFactory {
         switch (config.getSearchStrategy()) {
             case DFS:
                 return new PatternGrowthEngine(
-                    minProb, joiner, collector, ranking, singleItemLists, initialThreshold);
+                    minProb, joiner, collector, ranking, singleItemLists);
 
             case BEST_FIRST:
                 return new BestFirstSearchEngine(
                     minProb, ptwuPruningEnabled, joiner, collector, ranking,
-                    singleItemLists, initialThreshold);
+                    singleItemLists);
 
             case BREADTH_FIRST:
                 return new BreadthFirstSearchEngine(
                     minProb, ptwuPruningEnabled, joiner, collector, ranking,
-                    singleItemLists, initialThreshold);
+                    singleItemLists);
 
             case IDDFS:
                 return new IterativeDeepeningEngine(
                     minProb, ptwuPruningEnabled, joiner, collector, ranking,
-                    singleItemLists, initialThreshold);
+                    singleItemLists);
 
             default:
                 // All valid SearchStrategy enum values are handled above

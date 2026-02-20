@@ -1,7 +1,7 @@
 package domain.model;
 
 /**
- * Transient, per-transaction item descriptor used during Phase 2 UPU-List construction.
+ * Transient, per-transaction item descriptor used during Phase 1d UPU-List construction.
  *
  * <p>Each {@code ItemInfo} instance captures the information needed to produce one
  * {@link UtilityProbabilityList.Entry} for a specific item–transaction pair:
